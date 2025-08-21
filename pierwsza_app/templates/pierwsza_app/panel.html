@@ -1,0 +1,240 @@
+{% load static %}
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <title>Panel – {{ group }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root { --b:#e5e7eb; --t:#111827; --mut:#6b7280; }
+    body { font-family: system-ui, Segoe UI, Roboto, Arial, sans-serif; color:var(--t); margin:16px; }
+    h1 { font-size:20px; margin:0 0 12px; }
+    .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }
+    input[type=text], select { padding:6px 8px; border:1px solid var(--b); border-radius:6px; }
+    button { padding:6px 10px; border:1px solid var(--b); background:#fff; border-radius:6px; cursor:pointer; }
+    button:hover { background:#f9fafb; }
+    button.small { padding:2px 8px; font-size:12px; }
+    button.danger { border-color:#fca5a5; }
+    table { border-collapse:collapse; width:100%; font-size:14px; }
+    th, td { border:1px solid #ccc; padding:6px 8px; text-align:left; }
+    th { background:#f3f4f6; }
+    td.num { text-align:center; width:90px; }
+    td.lp { width:50px; text-align:center; }
+    .msg { padding:8px 10px; border-radius:8px; margin-bottom:10px; }
+    .msg.info { background:#ecfeff; border:1px solid #a5f3fc; }
+    .msg.err  { background:#fff1f2; border:1px solid #fecdd3; }
+    .muted { color:var(--mut); font-size:12px; }
+
+    /* ukryte formularze do kliknięcia */
+    .hidden { display:none !important; }
+
+    /* kolumna Akcja w jednej linii */
+    td.akcje {
+      display:flex;
+      flex-wrap:nowrap;
+      gap:6px;
+      align-items:center;
+    }
+    td.akcje form { margin:0; }
+  </style>
+</head>
+<body>
+
+<h1>Dział: {{ group }}</h1>
+
+{% if info %}<div class="msg info">{{ info }}</div>{% endif %}
+{% if error %}<div class="msg err">{{ error }}</div>{% endif %}
+
+<!-- Pasek: filtr + zakres -->
+<form method="get" class="bar">
+  <input type="hidden" name="action" value="show_stats">
+  <input type="text" name="q" value="{{ q }}" placeholder="Szukaj pracownika…">
+  <label>Od:
+    <select name="from_month">
+      {% for m in months %}
+        <option value="{{ m }}"{% if m == from_month %} selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+    <select name="from_year">
+      {% for y in years %}
+        <option value="{{ y }}"{% if y == from_year %} selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Do:
+    <select name="to_month">
+      {% for m in months %}
+        <option value="{{ m }}"{% if m == to_month %} selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+    <select name="to_year">
+      {% for y in years %}
+        <option value="{{ y }}"{% if y == to_year %} selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button>Pokaż Nd./L4</button>
+  <a class="muted" href="?">Wyczyść filtr</a>
+</form>
+
+<!-- Dodaj pracownika (tylko nazwisko i imię – stanowisko ustawiasz później w Edytuj) -->
+<form method="post" class="bar">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="add_employee">
+  <input type="text" name="new_emp" placeholder="Nazwisko i imię" required>
+  <button>Dodaj</button>
+</form>
+
+<!-- Tabela -->
+<table>
+  <thead>
+    <tr>
+      <th class="lp">Lp</th>
+      <th>Nazwisko i imię</th>
+      <th>Stanowisko</th>
+      <th class="num">Ilość niedz.</th>
+      <th class="num">Ilość L4</th>
+      <th style="width:560px;">Akcja</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in table_rows %}
+    <tr>
+      <td class="lp">{{ forloop.counter }}</td>
+      <td>{{ row.name }}</td>
+      <td>{{ row.position }}</td>
+      <td class="num">{{ row.ndz }}</td>
+      <td class="num">{{ row.l4 }}</td>
+
+      <td class="akcje">
+        <!-- Góra -->
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="move_up">
+          <input type="hidden" name="emp" value="{{ row.name }}">
+          <button class="small" title="Do góry">↑</button>
+        </form>
+
+        <!-- Dół -->
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="move_down">
+          <input type="hidden" name="emp" value="{{ row.name }}">
+          <button class="small" title="W dół">↓</button>
+        </form>
+
+        <!-- Edytuj: NAZWISKO + STANOWISKO -->
+        <button type="button" class="small" onclick="toggleForm('editForm{{ forloop.counter }}', true, 'input')">Edytuj</button>
+        <form id="editForm{{ forloop.counter }}" class="hidden togglable" method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="edit_employee">
+          <input type="hidden" name="old_emp" value="{{ row.name }}">
+          <input type="text" name="new_emp" value="{{ row.name }}" placeholder="Nazwisko i imię" style="width:180px;">
+          <input type="text" name="new_pos" value="{{ row.position }}" placeholder="Stanowisko" style="width:160px;">
+          <button class="small">Zapisz</button>
+        </form>
+
+        <!-- Usuń -->
+        <form method="post" onsubmit="return confirm('Usunąć {{ row.name }}?');">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="remove_employee">
+          <input type="hidden" name="emp" value="{{ row.name }}">
+          <button class="small danger">Usuń</button>
+        </form>
+
+        <!-- Przenieś -->
+        <button type="button" class="small" onclick="toggleForm('transferForm{{ forloop.counter }}', true, 'select')">Przenieś</button>
+        <form id="transferForm{{ forloop.counter }}" class="hidden togglable" method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="transfer_employee">
+          <input type="hidden" name="emp" value="{{ row.name }}">
+          <select name="target_group" required>
+            <option value="" disabled selected>Wybierz dział</option>
+            {% for g in groups_all %}
+              {% if g != group %}
+                <option value="{{ g }}">{{ g }}</option>
+              {% endif %}
+            {% endfor %}
+          </select>
+          <button class="small">OK</button>
+        </form>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6" class="muted">Brak pracowników.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Szybkie akcje -->
+<div class="bar" style="margin-top:12px;">
+  <!-- Przejdź do edycji -->
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="go_to_edit">
+    <select name="month">
+      {% for m in months %}
+        <option value="{{ m }}">{{ m }}</option>
+      {% endfor %}
+    </select>
+    <select name="year">
+      {% for y in years %}
+        <option value="{{ y }}">{{ y }}</option>
+      {% endfor %}
+    </select>
+    <button>Przejdź do edycji</button>
+  </form>
+
+  <!-- Zmień logowanie -->
+  <button type="button" onclick="toggleForm('credForm', true, 'input')">Zmień logowanie</button>
+  <form id="credForm" class="hidden togglable" method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="change_credentials">
+    <input type="text" name="login" placeholder="Nowy login">
+    <input type="text" name="password" placeholder="Nowe hasło">
+    <button>Zapisz</button>
+  </form>
+
+  <!-- Zmień nazwę działu -->
+  <button type="button" onclick="toggleForm('renameForm', true, 'input')">Zmień nazwę działu</button>
+  <form id="renameForm" class="hidden togglable" method="post" onsubmit="return confirm('Zmienić nazwę działu?');">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="rename_group">
+    <input type="text" name="new_name" placeholder="Nowa nazwa działu">
+    <button>Zapisz</button>
+  </form>
+</div>
+
+<script>
+/**
+ * toggleForm:
+ *  - jeśli closeOthers = true, zamyka wszystkie inne .togglable
+ *  - przełącza widoczność wybranego formularza (on/off)
+ *  - focusKind: 'input' | 'select' – ustawia fokus po otwarciu
+ */
+function toggleForm(id, closeOthers, focusKind) {
+  var el = document.getElementById(id);
+  if (!el) return;
+
+  if (closeOthers) {
+    document.querySelectorAll('.togglable').forEach(function(f) {
+      if (f.id !== id) f.classList.add('hidden');
+    });
+  }
+
+  el.classList.toggle('hidden');
+
+  if (!el.classList.contains('hidden')) {
+    if (focusKind === 'input') {
+      var inp = el.querySelector('input[type="text"], input:not([type])');
+      if (inp) { inp.focus(); inp.select && inp.select(); }
+    } else if (focusKind === 'select') {
+      var sel = el.querySelector('select');
+      if (sel) sel.focus();
+    }
+  }
+}
+</script>
+
+</body>
+</html>

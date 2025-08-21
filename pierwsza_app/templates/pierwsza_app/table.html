@@ -1,0 +1,27 @@
+{% extends "pierwsza_app/base.html" %}
+{% block title %}{{ group }} – {{ month }} {{ year }}{% endblock %}
+{% block content %}
+<h1>{{ group }} – {{ month }} {{ year }}</h1>
+
+<table>
+    <tr>
+        <th>Lp.</th>
+        <th>Nazwisko i imię</th>
+        {% for d in days %}<th>{{ d }}</th>{% endfor %}
+    </tr>
+
+    {% for u in users %}
+    <tr>
+        <td>{{ forloop.counter }}</td>
+        <td style="text-align:left">{{ u }}</td>
+        {% for d in days %}
+        <td></td> {# na razie puste komórki #}
+        {% endfor %}
+    </tr>
+    {% empty %}
+    <tr>
+        <td colspan="{{ colspan }}">Brak użytkowników</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}

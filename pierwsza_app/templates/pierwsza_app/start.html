@@ -1,0 +1,39 @@
+{% extends "pierwsza_app/base.html" %}
+{% block title %}Start{% endblock %}
+{% block content %}
+<h1>HRoMonitor – Działy</h1>
+
+{% if error %}<p style="color:#b00">{{ error }}</p>{% endif %}
+
+<h3>Istniejące działy</h3>
+<ul>
+    {% for g in groups %}
+    <li>
+        <strong>{{ g.name }}</strong>
+        — <a href="{% url 'login' g.name %}">Zaloguj</a>
+        — <a href="{% url 'delete_group' g.name %}" style="color:red;">Usuń</a>
+    </li>
+    {% empty %}
+    <li>Brak działów.</li>
+    {% endfor %}
+</ul>
+
+<h3 style="cursor:pointer; color:blue;" onclick="toggleForm()">➕ Dodaj nowy dział</h3>
+
+<div id="new-group-form" style="display:none; margin-top:1rem;">
+    <form method="post">
+        {% csrf_token %}
+        <p><label>Nazwa: <input name="name" required></label></p>
+        <p><label>Login: <input name="login" required></label></p>
+        <p><label>Hasło: <input name="password" type="password" required></label></p>
+        <button type="submit">Utwórz dział</button>
+    </form>
+</div>
+
+<script>
+    function toggleForm() {
+        const form = document.getElementById('new-group-form');
+        form.style.display = (form.style.display === 'none' || form.style.display === '') ? 'block' : 'none';
+    }
+</script>
+{% endblock %}

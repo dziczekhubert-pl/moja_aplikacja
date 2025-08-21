@@ -1,0 +1,18 @@
+{% extends "pierwsza_app/base.html" %}
+{% block title %}Usuń dział – {{ group }}{% endblock %}
+{% block content %}
+<h1>Usuń dział – {{ group }}</h1>
+
+{% if error %}<p style="color:#b00">{{ error }}</p>{% endif %}
+
+<p>Aby usunąć dział, podaj login i hasło administratora tego działu:</p>
+
+<form method="post">
+    {% csrf_token %}
+    <p><label>Login: <input name="login" required></label></p>
+    <p><label>Hasło: <input type="password" name="password" required></label></p>
+    <button type="submit" style="color:red;">Usuń dział</button>
+</form>
+
+<p><a href="{% url 'start' %}">Anuluj</a></p>
+{% endblock %}
