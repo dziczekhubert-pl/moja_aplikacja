@@ -38,7 +38,7 @@ INSTALLED_APPS = [
 # === Middleware ===
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # <— serwowanie statyków w produkcji
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # serwowanie statyków w produkcji
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -53,7 +53,7 @@ ROOT_URLCONF = 'moja_aplikacja.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],  # jeśli masz globalny katalog szablonów, dodaj tutaj ścieżkę
+        'DIRS': [],  # jeśli masz globalny katalog szablonów, dodaj ścieżkę
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -68,14 +68,24 @@ TEMPLATES = [
 WSGI_APPLICATION = 'moja_aplikacja.wsgi.application'
 
 # === Baza danych ===
-# Lokalnie domyślnie sqlite, na produkcji Postgres przez DATABASE_URL (Render → Environment)
-DATABASES = {
-    "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600,
-        ssl_require=True
-    )
-}
+# Jeśli jest DATABASE_URL (Render/Postgres) -> użyj go z SSL,
+# jeśli nie ma -> lokalnie użyj sqlite bez SSL (żeby nie było błędu sslmode przy sqlite).
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if DATABASE_URL:
+    DATABASES = {
+        "default": dj_database_url.config(
+            conn_max_age=600,
+            ssl_require=True,
+        )
+    }
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 # === Walidacja haseł ===
 AUTH_PASSWORD_VALIDATORS = [
@@ -86,7 +96,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # === Internationalization ===
-LANGUAGE_CODE = 'en-us'     # Możesz zmienić na 'pl' jeśli chcesz
+LANGUAGE_CODE = 'en-us'     # Możesz zmienić na 'pl'
 TIME_ZONE = 'UTC'           # Możesz zmienić na 'Europe/Warsaw'
 USE_I18N = True
 USE_TZ = True
@@ -94,7 +104,6 @@ USE_TZ = True
 # === Statyczne pliki (CSS/JS/obrazki) ===
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-# Lepsze serwowanie statyków w produkcji
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # === Klucz domyślny ===
