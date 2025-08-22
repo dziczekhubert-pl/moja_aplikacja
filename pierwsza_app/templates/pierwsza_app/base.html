@@ -112,15 +112,11 @@
 
     <!-- Prosta nawigacja; dopasuj linki do swoich potrzeb -->
     <nav>
-        <a class="btn" href="/">Start</a>
-        <a class="btn" href="/ping/">Ping</a>
-        <!-- Przykładowy skrót do tabeli testowej (zmień GrupaA na swoją nazwę) -->
-        <a class="btn" href="/tabela/GrupaA/">Tabela GrupaA</a>
         <!-- Jeśli masz panel/logowanie, linki poniżej zadziałają po dodaniu grupy -->
         <!-- <a class="btn" href="/login/GrupaA/">Logowanie (GrupaA)</a> -->
         <!-- <a class="btn" href="/panel/GrupaA/">Panel (GrupaA)</a> -->
     </nav>
-    <hr>
+   
 
     <!-- Django messages (opcjonalnie, jeśli używasz messages framework) -->
     {% if messages %}
@@ -132,7 +128,7 @@
     {% block content %}{% endblock %}
 
     <footer class="muted" style="margin-top:24px;">
-        <small>© {{ now|date:"Y" }} — Twoja aplikacja</small>
+        <small>HRoMonitor© {{ now|date:"Y" }} - Hubert Dziczek</small>
     </footer>
 
 </body>

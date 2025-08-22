@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect
-from django.http import HttpResponse, FileResponse, HttpResponseRedirect, JsonResponse
+from django.http import HttpResponse, FileResponse, HttpResponseRedirect, JsonResponse, Http404
 from django.conf import settings
 from django.views.decorators.http import require_POST
 from pathlib import Path
@@ -16,6 +16,15 @@ from .utils import (
 
 # katalog projektu (tam gdzie manage.py)
 BASE_DIR = Path(settings.BASE_DIR)
+
+# --- IMPORTY PDF (nowy mechanizm: generowanie w pamięci) ---
+from .core.pdf_grafik import generate_pdf_response as generate_grafik_pdf_response   # <- WYMAGANE
+
+# Karty: spróbuj użyć nowej funkcji, ale jeśli jeszcze nie wdrożona, pokaż czytelny komunikat
+try:
+    from .core.pdf_karty import generate_karty_pdf_response  # <- ZAIMPLEMENTUJ analo­gicznie jak pdf_grafik
+except Exception:
+    generate_karty_pdf_response = None
 
 
 # =======================
@@ -573,25 +582,32 @@ def edit_table(request, group):
             table[u["name"]] = row
 
         # zapisz JSON
-        json_path = save_table_to_file(group, month, year, table)
+        json_path = save_table_to_file(group, month, year, table)  # może zwrócić Path lub string
 
         action = request.POST.get("action", "save")
 
         if action == "grafik":
-            from .core.pdf_grafik import generate_pdf_from_json
-            generate_pdf_from_json(json_path)
-            pdf_name = f"grafik_{group.replace(' ', '_')}_{month}_{year}.pdf"
+            # Użyj nowego generatora PDF w pamięci.
+            # Podajemy NAZWĘ pliku (relative do BASE_DIR), bo tak oczekuje helper.
+            json_name = Path(json_path).name
             try:
-                return FileResponse(open(BASE_DIR / pdf_name, "rb"), as_attachment=True, filename=pdf_name)
-            except FileNotFoundError:
-                return HttpResponse(f"Nie znaleziono pliku PDF: {pdf_name}", status=404)
+                return generate_grafik_pdf_response(json_name)
+            except (FileNotFoundError, ValueError) as e:
+                raise Http404(str(e))
 
         elif action == "karty":
-            from .core.pdf_karty import generate_karty_pdf_from_json
-            pdf_path = generate_karty_pdf_from_json(json_path)
-            if pdf_path and os.path.exists(pdf_path):
-                return FileResponse(open(pdf_path, "rb"), as_attachment=True, filename=os.path.basename(pdf_path))
-            return HttpResponse("Nie udało się wygenerować PDF karty.", status=500)
+            if generate_karty_pdf_response is None:
+                return HttpResponse(
+                    "Moduł generowania PDF kart nie jest jeszcze zaktualizowany. "
+                    "Zaimplementuj funkcję generate_karty_pdf_response w pierwsza_app/core/pdf_karty.py "
+                    "analogicznie do grafiku.",
+                    status=500
+                )
+            json_name = Path(json_path).name
+            try:
+                return generate_karty_pdf_response(json_name)
+            except (FileNotFoundError, ValueError) as e:
+                raise Http404(str(e))
 
         elif action == "save_back":
             # zapis był wykonany powyżej → wracamy do panelu
