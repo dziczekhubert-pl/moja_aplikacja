@@ -7,7 +7,8 @@ from .views import (
     ping,
     tabela,
     edit_table,
-    autosave_cell,   # <-- ważne
+    autosave_cell,
+    logout_view,   # <-- dodaj import logout_view
 )
 
 urlpatterns = [
@@ -19,4 +20,5 @@ urlpatterns = [
     path("tabela/<str:group>/", tabela, name="tabela"),
     path("edycja/<str:group>/", edit_table, name="edit_table"),
     path("edycja/<str:group>/autosave/", autosave_cell, name="autosave_cell"),
+    path("logout/<str:group>/", logout_view, name="logout"),  # <-- poprawione
 ]

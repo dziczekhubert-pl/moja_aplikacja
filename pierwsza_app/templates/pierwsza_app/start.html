@@ -17,19 +17,19 @@
   .hero p { color: var(--muted); margin: 0; }
 
   .grid {
-    display: flex; 
-    flex-wrap: wrap;
-    gap: 12px;
-  }
+  display: grid;
+  grid-template-columns: repeat(4, 1fr); /* 4 kolumny */
+  gap: 12px;
+}
 
   .card {
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    background: #fff;
-    padding: 14px;
-    box-shadow: 0 6px 18px rgba(0,0,0,.04);
-    width: 260px;
-  }
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  padding: 14px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.04);
+  width: 100%;   /* zamiast 260px */
+}
 
   .actions { display:flex; gap:8px; flex-wrap:wrap; }
 
@@ -67,7 +67,7 @@
 </style>
 
 <section class="hero">
-  <h1>HRoMonitor</h1>
+  <h1>HRoMonitor<span style="font-size:0.6em; vertical-align:super;">©</span></h1>
   <p>Zarządzaj pracownikami, grafikami i kartami pracy.</p>
 </section>
 

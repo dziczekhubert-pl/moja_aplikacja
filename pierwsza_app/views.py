@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect
 from django.http import HttpResponse, FileResponse, HttpResponseRedirect, JsonResponse, Http404
 from django.conf import settings
 from django.views.decorators.http import require_POST
+from django.views.decorators.cache import never_cache
 from pathlib import Path
 from datetime import date, timedelta
 import os
@@ -22,7 +23,7 @@ from .core.pdf_grafik import generate_pdf_response as generate_grafik_pdf_respon
 
 # Karty: spróbuj użyć nowej funkcji, ale jeśli jeszcze nie wdrożona, pokaż czytelny komunikat
 try:
-    from .core.pdf_karty import generate_karty_pdf_response  # <- ZAIMPLEMENTUJ analo­gicznie jak pdf_grafik
+    from .core.pdf_karty import generate_karty_pdf_response  # <- ZAIMPLEMENTUJ analogicznie jak pdf_grafik
 except Exception:
     generate_karty_pdf_response = None
 
@@ -63,6 +64,7 @@ def load_users_norm(group):
 # =======================
 #   STRONA STARTOWA
 # =======================
+@never_cache
 def start(request):
     """
     Lista działów + ukryty formularz dodawania nowego działu.
@@ -103,6 +105,7 @@ def start(request):
 # =======================
 #     LOGOWANIE DZIAŁU
 # =======================
+@never_cache
 def login_view(request, group):
     groups = load_groups()
     g = get_group(groups, group)
@@ -116,6 +119,8 @@ def login_view(request, group):
 
         # proste sprawdzenie (jeśli nie chcesz globalnego admina — usuń drugi warunek)
         if (login == g["login"] and password == g["password"]) or (login == "admin" and password == "admin"):
+            # zapisz stan logowania w sesji dla danego działu
+            request.session["auth_group"] = group
             return redirect("panel", group=group)
         error = "Niepoprawny login lub hasło."
 
@@ -141,7 +146,7 @@ def months_between(from_month, from_year, to_month, to_year):
     return out
 
 
-# ======= ŚWIĘTA I NIEDZIELE (jak w JS: kolumna "sun") =======
+# ======= ŚWIĘTA I NIEDZIELE =======
 def _easter_date(y: int) -> date:
     """Data Wielkanocy (algorytm Meeusa)."""
     a = y % 19
@@ -190,12 +195,14 @@ def _is_sunday_or_holiday(y: int, m: int, d: int) -> bool:
 def count_stats(group, employees, month_year_list):
     """
     Zlicza:
-      - 'ndz': ile razy wpisano 1/2/3 w dniu będącym niedzielą LUB świętem,
-      - 'l4' : ile razy wpisano 'C' (klucz 'l4' zostawiony dla zgodności z szablonem).
+      - 'ndz'      : ile razy wpisano 1/2/3 w dniu będącym niedzielą LUB świętem,
+      - 'l4'       : ile razy wpisano 'C' (L4),
+      - 'workdays' : ile razy wpisano 1/2/3 w dniu roboczym pn–sob (0..5) z wyłączeniem świąt i niedziel.
+                     (Soboty wliczane – zgodnie z wymaganiem).
     """
     WORK_TOKENS = {"1", "2", "3"}
 
-    stats = {e["name"]: {"ndz": 0, "l4": 0} for e in employees}
+    stats = {e["name"]: {"ndz": 0, "l4": 0, "workdays": 0} for e in employees}
 
     for month_name, year_str in month_year_list:
         y = int(year_str)
@@ -208,10 +215,18 @@ def count_stats(group, employees, month_year_list):
             for d in range(1, n_days + 1):
                 val = (row[d - 1] if len(row) >= d else "") or ""
                 v = val.strip()
+                # L4
                 if v.upper() == "C":
                     stats[e["name"]]["l4"] += 1
-                if v in WORK_TOKENS and _is_sunday_or_holiday(y, m, d):
-                    stats[e["name"]]["ndz"] += 1
+                # Praca (1/2/3) – kwalifikacja dnia
+                if v in WORK_TOKENS:
+                    if _is_sunday_or_holiday(y, m, d):
+                        stats[e["name"]]["ndz"] += 1
+                    else:
+                        wd = date(y, m, d).weekday()  # 0..6
+                        # dni robocze pn–sob (0..5), święta już wykluczone
+                        if wd in (0, 1, 2, 3, 4, 5):
+                            stats[e["name"]]["workdays"] += 1
 
     return stats
 
@@ -247,11 +262,16 @@ def rename_group_and_files(old, new):
 # =======================
 #        PANEL
 # =======================
+@never_cache
 def panel(request, group):
     """
     Pasek akcji (dodaj pracownika, rozlicz karty, zmień dane log., zmień nazwę działu),
-    filtr „Szukaj”, zakres Od/Do i tabela z Nd./C + kolumna Akcja.
+    filtr „Szukaj”, zakres Od/Do i tabela ze statystykami + kolumna Akcja.
     """
+    # Wymuś aktywną sesję dla tego działu
+    if request.session.get("auth_group") != group:
+        return redirect("login", group=group)
+
     users = load_users_norm(group)  # lista {"name","position"}
     groups_all = [g["name"] for g in load_groups()]
     info, error = None, None
@@ -371,13 +391,20 @@ def panel(request, group):
                 {
                     "name": u["name"],
                     "position": u.get("position", ""),
+                    "workdays": stats[u["name"]]["workdays"],
                     "ndz": stats[u["name"]]["ndz"],
-                    "l4": stats[u["name"]]["l4"],  # w kolumnie "C" wyświetl tę wartość
+                    "l4": stats[u["name"]]["l4"],
                 }
             )
     else:
         for u in visible_users:
-            table_rows.append({"name": u["name"], "position": u.get("position", ""), "ndz": 0, "l4": 0})
+            table_rows.append({
+                "name": u["name"],
+                "position": u.get("position", ""),
+                "workdays": 0,
+                "ndz": 0,
+                "l4": 0
+            })
 
     months = list(POLISH_MONTHS.keys())
     years = [str(y) for y in range(2025, 2035)]
@@ -397,6 +424,21 @@ def panel(request, group):
             "info": info, "error": error
         },
     )
+
+
+# =======================
+#      WYLOGOWANIE
+# =======================
+@require_POST
+def logout_view(request, group=None):
+    """
+    Czyści sesję i wraca na stronę startową. Dodaje nagłówki anty-cache.
+    """
+    request.session.flush()
+    resp = redirect("start")
+    resp["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp["Pragma"] = "no-cache"
+    return resp
 
 
 # =======================

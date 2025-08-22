@@ -84,6 +84,7 @@
             background: #fbfbfb;
         }
 
+        /* Ogólne style pól formularza */
         input[type="text"],
         input[type="password"],
         select,
@@ -92,6 +93,7 @@
             padding: 8px;
             border: 1px solid var(--border);
             border-radius: 8px;
+            font: inherit;
         }
 
         form .row {
@@ -105,6 +107,25 @@
                 grid-template-columns: 1fr;
             }
         }
+
+        /* --- MOCNE WYMUSZENIE DLA LOGINU I HASŁA --- */
+        /* Te reguły nadpiszą inne style i ujednolicą oba pola,
+           nawet jeśli coś wcześniej robiło im różne kształty/szerokości. */
+        input[name="login"],
+        input[name="password"] {
+            display: block !important;
+            width: 300px !important;
+            max-width: none !important;
+            padding: 8px !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 8px !important;
+            height: 40px !important;
+            background: #fff !important;
+            font: inherit !important;
+            -webkit-appearance: none !important;
+            appearance: none !important;
+            box-shadow: none !important;
+        }
     </style>
 </head>
 
@@ -116,7 +137,6 @@
         <!-- <a class="btn" href="/login/GrupaA/">Logowanie (GrupaA)</a> -->
         <!-- <a class="btn" href="/panel/GrupaA/">Panel (GrupaA)</a> -->
     </nav>
-   
 
     <!-- Django messages (opcjonalnie, jeśli używasz messages framework) -->
     {% if messages %}
@@ -128,9 +148,8 @@
     {% block content %}{% endblock %}
 
     <footer class="muted" style="margin-top:24px;">
-        <small>HRoMonitor© {{ now|date:"Y" }} - Hubert Dziczek</small>
+        <small>Hubert Dziczek {{ now|date:"Y" }} - optymalizacje.procesow@gmail.com </small>
     </footer>
 
 </body>
-
 </html>
