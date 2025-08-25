@@ -52,9 +52,12 @@
       color:inherit;
       display:inline-flex;
       align-items:center;
+      font-size:14px;
+      line-height:1;
+      vertical-align: middle;
     }
     button:hover, .btn:hover { background:#f9fafb; }
-    button.small { padding:2px 8px; font-size:12px; }
+    button.small, .btn.small { padding:2px 8px; font-size:12px; }
     button.danger { border-color:#fca5a5; }
 
     table { border-collapse:collapse; width:100%; font-size:14px; }
@@ -77,18 +80,16 @@
       .bar { gap:6px; }
       td.akcje { gap:4px; }
     }
-.footer {
-  margin-top: 30px;
-  text-align: left;
-  color: #6b7280;
-  font-size: 13px;
-}
-
-.footer a {
-  color: #6b7280;
-  text-decoration: none;
-}
-
+    .footer {
+      margin-top: 30px;
+      text-align: left;
+      color: #6b7280;
+      font-size: 13px;
+    }
+    .footer a {
+      color: #6b7280;
+      text-decoration: none;
+    }
   </style>
 </head>
 <body>
@@ -106,21 +107,33 @@
 <div class="card">
   <h2>Szybkie akcje</h2>
   <div class="bar" style="margin-top:4px;">
-    <!-- Przejdź do edycji -->
+    <!-- Jeden formularz: Przejdź do edycji + Ustaw grafik -->
     <form method="post">
       {% csrf_token %}
-      <input type="hidden" name="action" value="go_to_edit">
-      <select name="month">
-        {% for m in months %}
-          <option value="{{ m }}">{{ m }}</option>
-        {% endfor %}
-      </select>
-      <select name="year">
-        {% for y in years %}
-          <option value="{{ y }}">{{ y }}</option>
-        {% endfor %}
-      </select>
-      <button>Przejdź do edycji</button>
+      <label>
+        <select name="month">
+          {% for m in months %}
+            <option value="{{ m }}"{% if m == from_month %} selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        <select name="year">
+          {% for y in years %}
+            <option value="{{ y }}"{% if y == from_year %} selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <!-- przycisk do edycji -->
+      <button type="submit" name="action" value="go_to_edit">Przejdź do edycji</button>
+
+      <!-- przycisk do ustawienia grafiku -->
+      <button
+        type="submit"
+        formmethod="get"
+        formaction="{% url 'grafik' group %}"
+      >Ustaw grafik</button>
     </form>
 
     <!-- Zmień logowanie -->
@@ -140,7 +153,7 @@
     </form>
   </div>
 
-  <!-- Dodaj pracownika (przeniesione tutaj) -->
+  <!-- Dodaj pracownika -->
   <form method="post" class="bar" style="margin-top:10px;">
     {% csrf_token %}
     <input type="hidden" name="action" value="add_employee">
@@ -193,6 +206,7 @@
         <th class="lp">Lp</th>
         <th>Nazwisko i imię</th>
         <th>Stanowisko</th>
+        <th>Kontakt</th> <!-- NOWA KOLUMNA -->
         <th class="num">Dni robocze</th>
         <th class="num">Dni świąteczne</th>
         <th class="num">Chorobowe</th>
@@ -205,6 +219,7 @@
         <td class="lp">{{ forloop.counter }}</td>
         <td>{{ row.name }}</td>
         <td>{{ row.position }}</td>
+        <td>{{ row.contact }}</td> <!-- NOWA KOLUMNA -->
         <td class="num">{{ row.workdays }}</td>
         <td class="num">{{ row.ndz }}</td>
         <td class="num">{{ row.l4 }}</td>
@@ -224,8 +239,11 @@
             {% csrf_token %}
             <input type="hidden" name="action" value="edit_employee">
             <input type="hidden" name="old_emp" value="{{ row.name }}">
+
             <input type="text" name="new_emp" value="{{ row.name }}" placeholder="Nazwisko i imię" style="width:180px;">
             <input type="text" name="new_pos" value="{{ row.position }}" placeholder="Stanowisko" style="width:160px;">
+            <input type="text" name="new_contact" value="{{ row.contact }}" placeholder="Kontakt" style="width:160px;"> <!-- NOWE POLE -->
+
             <button class="small">Zapisz</button>
           </form>
           <form method="post" onsubmit="return confirm('Usunąć {{ row.name }}?');">
@@ -252,7 +270,7 @@
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="7" class="muted">Brak pracowników.</td></tr>
+      <tr><td colspan="8" class="muted">Brak pracowników.</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -281,12 +299,11 @@ function toggleForm(id, closeOthers, focusKind) {
 </script>
 
 <footer class="footer">
-  Hubert Dziczek – 
+  Hubert Dziczek –
   <a href="mailto:optymalizacje.procesow@gmail.com">
     optymalizacje.procesow@gmail.com
   </a>
 </footer>
-
 
 </body>
 </html>

@@ -8,7 +8,8 @@ from .views import (
     tabela,
     edit_table,
     autosave_cell,
-    logout_view,   # <-- dodaj import logout_view
+    logout_view,
+    grafik_view,   # <-- NOWO: importujemy nowy widok
 )
 
 urlpatterns = [
@@ -20,5 +21,6 @@ urlpatterns = [
     path("tabela/<str:group>/", tabela, name="tabela"),
     path("edycja/<str:group>/", edit_table, name="edit_table"),
     path("edycja/<str:group>/autosave/", autosave_cell, name="autosave_cell"),
-    path("logout/<str:group>/", logout_view, name="logout"),  # <-- poprawione
+    path("grafik/<str:group>/", grafik_view, name="grafik"),  # <-- TU kierujemy na nowy ekran
+    path("logout/<str:group>/", logout_view, name="logout"),
 ]

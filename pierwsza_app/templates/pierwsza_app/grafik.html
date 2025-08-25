@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <title>Ustaw grafik – {{ group }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <style>
+    :root { --b:#e5e7eb; --t:#111827; --mut:#6b7280; --red:#dc2626; }
+
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, Segoe UI, Roboto, Arial, sans-serif; color:var(--t); margin:16px; }
+
+    .hero{
+      border:0.5px solid var(--b); border-radius:18px;
+      padding: clamp(20px, 5vw, 48px);
+      background:
+        radial-gradient(90% 90% at 0% 0%, #e9f2ff 0%, transparent 60%),
+        radial-gradient(90% 90% at 100% 0%, #e9ffef 0%, transparent 60%), #fff;
+      margin-bottom: 18px;
+    }
+    .hero h1{ font-size: clamp(26px, 4.5vw, 38px); line-height:1.1; margin:10px 0 4px; }
+    .hero p{ color:var(--mut); margin:0; }
+
+    .card{
+      border:1px solid var(--b); border-radius:14px; background:#fff;
+      padding:14px; box-shadow:0 6px 18px rgba(0,0,0,.04); margin-bottom:14px;
+    }
+    .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:0 0 8px; }
+
+    button, .btn {
+      padding:6px 10px; border:1px solid var(--b); background:#fff;
+      border-radius:6px; cursor:pointer; text-decoration:none; color:inherit;
+      display:inline-flex; align-items:center; font-size:14px; line-height:1;
+    }
+    button:hover, .btn:hover { background:#f9fafb; }
+
+    input[type=text], input[type=date], input[type=number], select {
+      padding:6px 8px; border:1px solid var(--b); border-radius:6px; font-size:14px; background:#fff;
+    }
+
+    .readonly { background: #f3f4f6; color: #374151; }
+
+    .msg { padding:8px 10px; border-radius:8px; margin-bottom:10px; }
+    .msg.info { background:#ecfeff; border:1px solid #a5f3fc; }
+    .msg.err  { background:#fff1f2; border:1px solid #fecdd3; }
+
+    .row-item {
+      display:flex; gap:4px; padding:2px 4px; margin-bottom:0px;
+      border-radius:4px; background:#f9fafb; align-items:center;
+    }
+    .row-item input, .row-item select { width:200px; min-width:160px; flex:0 0 auto; }
+    .row-actions { display:flex; gap:4px; }
+
+    @media (max-width:700px){
+      .row-item { flex-wrap:wrap; }
+      .row-item input, .row-item select { width:100%; }
+    }
+
+    .footer { margin-top:30px; text-align:left; color:#6b7280; font-size:13px; }
+    .footer a { color:#6b7280; text-decoration:none; }
+
+    /* Modale */
+    .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.3); display:none; }
+    .modal-card { max-width:560px; margin:6vh auto; background:#fff; border:1px solid var(--b); border-radius:12px; padding:16px; }
+    .modal-title { margin:0 0 8px; font-size:18px; }
+
+    /* Kolorowanie osób spoza działu w liście */
+    option.opt-outside { color: var(--red); }
+  </style>
+</head>
+<body>
+
+<section class="hero">
+  <h1>Ustaw grafik</h1>
+  <p>Dział: {{ group }}</p>
+</section>
+
+{% if info %}<div class="msg info">{{ info }}</div>{% endif %}
+{% if error %}<div class="msg err">{{ error }}</div>{% endif %}
+
+<div class="card">
+  <!-- Pasek narzędzi -->
+  <div class="bar">
+    <button type="button" onclick="shiftDay(-1)">← Poprzedni</button>
+    <input type="date" id="dayPicker" value="{{ date_str }}">
+    <button type="button" onclick="shiftDay(1)">Następny →</button>
+    <button type="button" onclick="goToday()">Dziś</button>
+
+    <span style="flex:1 1 auto"></span>
+
+    <button type="button" id="createTplBtn">Stwórz schemat</button>
+    <button type="button" id="loadTplBtn">Wczytaj schemat</button>
+
+    <button type="button" id="addRowBtn">Dodaj wiersz</button>
+    <button type="button" id="clearAllBtn" onclick="if(confirm('Usunąć wszystkie wiersze?')) clearAllRows()">Wyczyść</button>
+    <a href="{% url 'panel' group %}" class="btn">← Wróć do panelu</a>
+  </div>
+
+  <!-- Formularz grafiku -->
+  <form method="post" id="grafikForm">
+    {% csrf_token %}
+    <input type="hidden" name="date" id="hiddenDate" value="{{ date_str }}">
+
+    <!-- Dane pracowników (WSZYSCY) -->
+    <script>
+      const CURRENT_GROUP = "{{ group|escapejs }}";
+      // EMP_DATA budujemy z employees_meta (pełna baza), a nie z employee_list
+      const EMP_DATA = {
+        {% if employees_meta %}
+          {% for nm, meta in employees_meta.items %}
+            "{{ nm|escapejs }}": {
+              "contact": "{{ meta.contact|default:''|escapejs }}",
+              "position": "{{ meta.position|default:''|escapejs }}",
+              "department": "{{ meta.department|default:''|escapejs }}"
+            }{% if not forloop.last %},{% endif %}
+          {% endfor %}
+        {% else %}
+        {% endif %}
+      };
+    </script>
+
+    <!-- Opcje selecta pracowników -->
+    <template id="empOptionsTemplate">
+      <option value="">-----</option> <!-- pusta opcja na górze -->
+      {% if all_employees %}
+        {% for dept, emps in all_employees.items %}
+          <optgroup label="{{ dept }}">
+            {% for e in emps %}
+              <option
+                value="{{ e|escape }}"
+                data-dept="{{ dept|escape }}"
+              >{{ e }}</option>
+            {% endfor %}
+          </optgroup>
+        {% endfor %}
+      {% else %}
+        <option value="" disabled>Brak pracowników</option>
+      {% endif %}
+    </template>
+
+    <!-- Wiersze -->
+    <div id="rowsBody">
+      {% if rows and rows|length > 0 %}
+        {% for r in rows %}
+        <div class="row-item">
+          <select name="emp[]" onchange="applyEmployeeData(this)">
+            <option value="">-----</option>
+            {% if all_employees %}
+              {% for dept, emps in all_employees.items %}
+                <optgroup label="{{ dept }}">
+                  {% for e in emps %}
+                    <option
+                      value="{{ e|escape }}"
+                      data-dept="{{ dept|escape }}"
+                      class="{% if dept != group %}opt-outside{% endif %}"
+                      {% if r.name == e %}selected{% endif %}
+                    >{{ e }}</option>
+                  {% endfor %}
+                </optgroup>
+              {% endfor %}
+            {% else %}
+              <option value="" disabled selected>Brak pracowników</option>
+            {% endif %}
+          </select>
+          <input type="text" name="pos[]" value="{{ r.position|default:'' }}" placeholder="Stanowisko">
+          <input type="text" name="contact[]" value="{{ r.contact|default:'' }}" placeholder="email lub telefon" readonly class="readonly">
+          <div class="row-actions">
+            <button type="button" onclick="removeRow(this)">✕</button>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="row-item">
+          <select name="emp[]" onchange="applyEmployeeData(this)">
+            <option value="" selected>-----</option>
+            {% if all_employees %}
+              {% for dept, emps in all_employees.items %}
+                <optgroup label="{{ dept }}">
+                  {% for e in emps %}
+                    <option
+                      value="{{ e|escape }}"
+                      data-dept="{{ dept|escape }}"
+                      class="{% if dept != group %}opt-outside{% endif %}"
+                    >{{ e }}</option>
+                  {% endfor %}
+                </optgroup>
+              {% endfor %}
+            {% else %}
+              <option value="" disabled selected>Brak pracowników</option>
+            {% endif %}
+          </select>
+          <input type="text" name="pos[]" placeholder="Stanowisko">
+          <input type="text" name="contact[]" placeholder="email lub telefon" readonly class="readonly">
+          <div class="row-actions">
+            <button type="button" onclick="moveUp(this)">↑</button>
+            <button type="button" onclick="moveDown(this)">↓</button>
+            <button type="button" onclick="removeRow(this)">✕</button>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="bar" style="margin-top:12px; justify-content:flex-start;">
+      <button type="submit">Zapisz</button>
+    </div>
+  </form>
+</div>
+
+<!-- Modal: Stwórz/edytuj schemat -->
+<div id="tplCreateModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <h3 class="modal-title" id="tplModalTitle">Nowy schemat</h3>
+    <input type="hidden" id="tplEditingName">
+    <div class="row-item" style="background:#fff;">
+      <input type="text" id="tplName" placeholder="Nazwa schematu" style="flex:1 1 auto;">
+    </div>
+    <div class="row-item" style="background:#fff;">
+      <input type="number" id="tplRowsCount" min="1" value="5" style="width:140px;">
+      <button type="button" id="tplBuildRows">Utwórz pola stanowisk</button>
+    </div>
+    <div id="tplPositionsBox"></div>
+    <div class="bar" style="justify-content:flex-end; margin-top:12px;">
+      <button type="button" id="tplCancel">Anuluj</button>
+      <button type="button" id="tplSave" style="margin-left:6px;">Zapisz</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Wczytaj schemat -->
+<div id="tplLoadModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <h3 class="modal-title">Wczytaj schemat</h3>
+    <div id="tplList"></div>
+    <div class="bar" style="justify-content:flex-end; margin-top:12px;">
+      <button type="button" id="tplCloseLoad">Zamknij</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ====== Data helpers ====== */
+function toISO(d){ const pad=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function parseISO(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,(m||1)-1,(d||1)); }
+
+/* ====== Dni ====== */
+function shiftDay(delta){
+  const inp=document.getElementById('dayPicker');
+  const cur=parseISO(inp?.value || '{{ date_str }}');
+  cur.setDate(cur.getDate()+delta);
+  window.location.href=`${window.location.pathname}?date=${toISO(cur)}`;
+}
+function goToday(){ window.location.href=`${window.location.pathname}?date=${toISO(new Date())}`; }
+
+/* ====== Wiersze & kontakt ====== */
+const rowsBody=document.getElementById('rowsBody');
+const addRowBtn=document.getElementById('addRowBtn');
+const empOptionsTemplate=document.getElementById('empOptionsTemplate');
+if(addRowBtn){ addRowBtn.addEventListener('click',()=>addRow()); }
+
+function markSelectColor(sel){
+  const opt = sel.options[sel.selectedIndex];
+  const dept = opt && opt.dataset ? opt.dataset.dept : '';
+  // Koloruj tylko, gdy wybrano pracownika i jest spoza działu
+  sel.style.color = (dept && dept !== CURRENT_GROUP) ? 'var(--red)' : 'inherit';
+}
+
+function addRow(prefill={emp:'',pos:'',contact:''}){
+  const wrap=document.createElement('div'); wrap.className='row-item';
+  const select=document.createElement('select'); select.name='emp[]'; select.innerHTML=empOptionsTemplate.innerHTML; select.onchange=function(){applyEmployeeData(this)};
+
+  // Ustawiamy domyślnie '-----' (wartość pusta), chyba że podano poprawny prefill.emp
+  if (prefill.emp && [...select.options].some(o=>o.value===prefill.emp)) {
+    select.value = prefill.emp;
+  } else {
+    select.value = ''; // wymusza '-----'
+  }
+
+  const pos=document.createElement('input'); pos.type='text'; pos.name='pos[]'; pos.placeholder='Stanowisko'; pos.value=prefill.pos||'';
+  const contact=document.createElement('input'); contact.type='text'; contact.name='contact[]'; contact.placeholder='email lub telefon'; contact.readOnly=true; contact.classList.add('readonly'); contact.value=prefill.contact||'';
+  const actions=document.createElement('div');
+  actions.className='row-actions';
+  actions.innerHTML = `<button type="button" onclick="removeRow(this)">✕</button>`;
+
+  wrap.appendChild(select); wrap.appendChild(pos); wrap.appendChild(contact); wrap.appendChild(actions);
+  rowsBody.appendChild(wrap);
+  applyEmployeeData(select);
+  markSelectColor(select);
+}
+function removeRow(btn){btn.closest('.row-item')?.remove();}
+function clearAllRows(){rowsBody.innerHTML='';addRow();}
+function applyEmployeeData(sel){
+  const row=sel.closest('.row-item');
+  const name=sel.value;
+  const contact=row.querySelector('input[name="contact[]"]');
+  const meta = EMP_DATA && EMP_DATA[name] ? EMP_DATA[name] : null;
+  if(contact){ contact.value = name ? (meta?.contact || '') : ''; } // czyść dla '-----'
+  markSelectColor(sel);
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('select[name="emp[]"]').forEach(sel=>{
+    if (!sel.value) sel.value = '';
+    sel.addEventListener('change',()=>applyEmployeeData(sel));
+    applyEmployeeData(sel);
+    markSelectColor(sel);
+  });
+  const picker=document.getElementById('dayPicker'); const hidden=document.getElementById('hiddenDate');
+  if(picker){ picker.addEventListener('change',()=>{ if(hidden) hidden.value=picker.value; window.location.href=`${window.location.pathname}?date=${picker.value}`; }); }
+});
+
+/* ====== Schematy (LocalStorage) – widoczne tylko w obrębie działu ====== */
+const TPL_LS_KEY='grafik_templates_v1';
+const TPL_KEY = `${TPL_LS_KEY}::${CURRENT_GROUP}`; // klucz namespacowany działem
+const TplStore={
+  _key(){ return TPL_KEY; },
+  all(){
+    try{ return JSON.parse(localStorage.getItem(this._key())||'{}'); } catch{ return {}; }
+  },
+  saveAll(o){ localStorage.setItem(this._key(), JSON.stringify(o)); },
+  upsert(name, positions){
+    const data=this.all();
+    data[name]={ name, positions, group: CURRENT_GROUP };
+    this.saveAll(data);
+  },
+  remove(name){ const data=this.all(); delete data[name]; this.saveAll(data); }
+};
+
+const $=sel=>document.querySelector(sel);
+const createModal=$('#tplCreateModal'), loadModal=$('#tplLoadModal');
+
+$('#createTplBtn')?.addEventListener('click', ()=>openCreateTpl());
+$('#loadTplBtn')?.addEventListener('click',   ()=>openLoadTpl());
+$('#tplCancel')?.addEventListener('click',    ()=>closeCreateTpl());
+$('#tplCloseLoad')?.addEventListener('click', ()=>closeLoadTpl());
+
+function openCreateTpl(editName=null){
+  $('#tplModalTitle').textContent = editName ? 'Edytuj schemat' : 'Nowy schemat';
+  $('#tplEditingName').value = editName || '';
+  const box=$('#tplPositionsBox'); box.innerHTML='';
+  if(editName){
+    const t=TplStore.all()[editName];
+    $('#tplName').value = t?.name || editName;
+    const len = (t?.positions?.length || 1);
+    $('#tplRowsCount').value = len;
+    t?.positions?.forEach((p,i)=>{
+      const row=document.createElement('div'); row.className='row-item'; row.style.background='#fff';
+      row.innerHTML = `<span style="width:28px;">${i+1}.</span><input type="text" class="tpl-pos" value="${p.replaceAll('"','&quot;')}" style="flex:1">`;
+      box.appendChild(row);
+    });
+  } else {
+    $('#tplName').value=''; $('#tplRowsCount').value=5;
+  }
+  createModal.style.display='block'; createModal.setAttribute('aria-hidden','false');
+  createModal.onkeydown = (e)=>{ if(e.key==='Enter') { e.preventDefault(); saveTemplate(); } };
+}
+function closeCreateTpl(){ createModal.style.display='none'; createModal.setAttribute('aria-hidden','true'); createModal.onkeydown=null; }
+function openLoadTpl(){ renderTplList(); loadModal.style.display='block'; loadModal.setAttribute('aria-hidden','false'); }
+function closeLoadTpl(){ loadModal.style.display='none'; loadModal.setAttribute('aria-hidden','true'); }
+
+$('#tplBuildRows')?.addEventListener('click', ()=>{
+  const n=Math.max(1, parseInt($('#tplRowsCount').value||'1',10));
+  const box=$('#tplPositionsBox'); box.innerHTML='';
+  for(let i=0;i<n;i++){
+    const row=document.createElement('div'); row.className='row-item'; row.style.background='#fff';
+    row.innerHTML = `<span style="width:28px;">${i+1}.</span><input type="text" class="tpl-pos" style="flex:1" placeholder="Stanowisko">`;
+    box.appendChild(row);
+  }
+});
+
+$('#tplSave')?.addEventListener('click', saveTemplate);
+
+function saveTemplate(){
+  const oldName = ($('#tplEditingName').value || '').trim();
+  const name    = ($('#tplName').value || '').trim();
+  if(!name){ alert('Podaj nazwę schematu.'); return; }
+  const positions = [...document.querySelectorAll('.tpl-pos')].map(i=>(i.value||'').trim());
+  if(!positions.length || positions.some(p=>!p)){ alert('Uzupełnij wszystkie stanowiska.'); return; }
+  if(oldName && oldName !== name){ TplStore.remove(oldName); }
+  TplStore.upsert(name, positions);
+  closeCreateTpl();
+  renderTplList();
+}
+
+function renderTplList(){
+  const data=TplStore.all();
+  const box=$('#tplList');
+  const names=Object.keys(data);
+  if(!names.length){ box.innerHTML='<div class="msg info">Brak schematów w tym dziale.</div>'; return; }
+  box.innerHTML = names.map(n=>{
+    const preview = (data[n]?.positions || []).join(', ');
+    return `
+      <div class="card" style="margin-bottom:10px;">
+        <div style="display:flex; gap:6px; align-items:center;">
+          <strong style="flex:1 1 auto;">${n}</strong>
+          <button type="button" class="tpl-apply" data-name="${encodeURIComponent(n)}">Wczytaj</button>
+          <button type="button" class="tpl-edit"  data-name="${encodeURIComponent(n)}">Edytuj</button>
+          <button type="button" class="tpl-del"   data-name="${encodeURIComponent(n)}">Usuń</button>
+        </div>
+        <div style="font-size:13px; color:var(--mut); margin-top:4px;">${preview}</div>
+      </div>
+    `;
+  }).join('');
+
+  box.querySelectorAll('.tpl-apply').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const name = decodeURIComponent(btn.dataset.name);
+      const t = TplStore.all()[name];
+      if(!t){ alert('Nie znaleziono schematu.'); return; }
+      rowsBody.innerHTML=''; (t.positions||[]).forEach(p=>addRow({pos:p}));
+      closeLoadTpl();
+    });
+  });
+  box.querySelectorAll('.tpl-edit').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const name = decodeURIComponent(btn.dataset.name);
+      closeLoadTpl();
+      openCreateTpl(name);
+    });
+  });
+  box.querySelectorAll('.tpl-del').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const name = decodeURIComponent(btn.dataset.name);
+      if(confirm(`Usunąć schemat "${name}"?`)){
+        TplStore.remove(name);
+        renderTplList();
+      }
+    });
+  });
+}
+
+/* Opcjonalne przesuwanie wierszy */
+function moveUp(btn){
+  const row = btn.closest('.row-item');
+  const prev = row.previousElementSibling;
+  if(prev){ row.parentNode.insertBefore(row, prev); }
+}
+function moveDown(btn){
+  const row = btn.closest('.row-item');
+  const next = row.nextElementSibling;
+  if(next){ row.parentNode.insertBefore(next, row); }
+}
+</script>
+
+<footer class="footer">
+  Hubert Dziczek –
+  <a href="mailto:optymalizacje.procesow@gmail.com">optymalizacje.procesow@gmail.com</a>
+</footer>
+
+</body>
+</html>

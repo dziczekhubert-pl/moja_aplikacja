@@ -5,6 +5,7 @@ from django.views.decorators.http import require_POST
 from django.views.decorators.cache import never_cache
 from pathlib import Path
 from datetime import date, timedelta
+from collections import defaultdict
 import os
 import json
 
@@ -33,30 +34,41 @@ except Exception:
 # =======================
 def normalize_users(users_list):
     """
-    Zwraca listę słowników {"name": "...", "position": "..."}.
+    Zwraca listę słowników {"name": "...", "position": "...", "contact": "..."}.
     Jeśli dostanie listę stringów – konwertuje do nowego formatu.
     """
     norm = []
     for u in users_list or []:
         if isinstance(u, str):
-            norm.append({"name": u, "position": ""})
+            norm.append({"name": u, "position": "", "contact": ""})
         elif isinstance(u, dict):
             norm.append({
                 "name": (u.get("name") or "").strip(),
-                "position": (u.get("position") or "").strip()
+                "position": (u.get("position") or "").strip(),
+                "contact": (u.get("contact") or "").strip(),
             })
     return norm
 
 
 def load_users_norm(group):
     """
-    Wczytaj użytkowników danego działu i upewnij się, że są w nowym formacie.
-    Jeśli były stringi – nadpisz plik już z nowym formatem (migracja w locie).
+    Wczytaj użytkowników danego działu i upewnij się, że są w nowym formacie
+    (zawierają 'name', 'position', 'contact'). Jeśli były stringi lub brakowało
+    pól – zapisz od razu w nowym formacie (migracja w locie).
     """
     raw = load_users_from_file(group)
     users = normalize_users(raw)
-    # Jeśli wejście było w starym formacie – zapisz od razu w nowym
+
+    needs_migration = False
     if any(isinstance(x, str) for x in (raw or [])):
+        needs_migration = True
+    else:
+        for x in (raw or []):
+            if isinstance(x, dict) and ("contact" not in x or "position" not in x):
+                needs_migration = True
+                break
+
+    if needs_migration:
         save_users_to_file(group, users)
     return users
 
@@ -272,7 +284,7 @@ def panel(request, group):
     if request.session.get("auth_group") != group:
         return redirect("login", group=group)
 
-    users = load_users_norm(group)  # lista {"name","position"}
+    users = load_users_norm(group)  # lista {"name","position","contact"}
     groups_all = [g["name"] for g in load_groups()]
     info, error = None, None
 
@@ -293,7 +305,7 @@ def panel(request, group):
             new_emp = (request.POST.get("new_emp") or "").strip()
             if new_emp:
                 if not any(u["name"] == new_emp for u in users):
-                    users.append({"name": new_emp, "position": ""})
+                    users.append({"name": new_emp, "position": "", "contact": ""})
                     save_users_to_file(group, users)
                     info = f"Dodano pracownika: {new_emp}"
                 else:
@@ -325,6 +337,8 @@ def panel(request, group):
             old = (request.POST.get("old_emp") or "").strip()
             new_name = (request.POST.get("new_emp") or "").strip()
             new_pos = (request.POST.get("new_pos") or "").strip()
+            new_contact = (request.POST.get("new_contact") or "").strip()
+
             if not new_name:
                 error = "Podaj nowe nazwisko i imię."
             else:
@@ -332,6 +346,7 @@ def panel(request, group):
                     if u["name"] == old:
                         u["name"] = new_name
                         u["position"] = new_pos
+                        u["contact"] = new_contact
                         break
                 save_users_to_file(group, users)
                 info = f"Zmieniono dane pracownika: {old} → {new_name}"
@@ -357,6 +372,12 @@ def panel(request, group):
                 error = "Wybierz inny dział."
 
         elif action == "go_to_edit":
+            month = request.POST.get("month", "Styczeń")
+            year = request.POST.get("year", "2025")
+            return redirect(f"/edycja/{group}/?month={month}&year={year}")
+
+        elif action == "set_schedule":
+            # NOWE: przycisk "Ustaw grafik" – przejście do edycji z wybranym miesiącem/rokiem
             month = request.POST.get("month", "Styczeń")
             year = request.POST.get("year", "2025")
             return redirect(f"/edycja/{group}/?month={month}&year={year}")
@@ -391,6 +412,7 @@ def panel(request, group):
                 {
                     "name": u["name"],
                     "position": u.get("position", ""),
+                    "contact": u.get("contact", ""),
                     "workdays": stats[u["name"]]["workdays"],
                     "ndz": stats[u["name"]]["ndz"],
                     "l4": stats[u["name"]]["l4"],
@@ -401,6 +423,7 @@ def panel(request, group):
             table_rows.append({
                 "name": u["name"],
                 "position": u.get("position", ""),
+                "contact": u.get("contact", ""),
                 "workdays": 0,
                 "ndz": 0,
                 "l4": 0
@@ -424,6 +447,139 @@ def panel(request, group):
             "info": info, "error": error
         },
     )
+
+
+@never_cache
+def grafik_view(request, group):
+    """
+    Zakładka 'Ustaw grafik' - plan dzienny z nawigacją poprzedni/następny/dziś.
+    - GET: wczytuje stan dla wybranego dnia (?date=YYYY-MM-DD), domyślnie dziś
+    - POST: zapisuje stan w kluczu wybranego dnia
+    Format pliku: { "YYYY-MM-DD": [ {name, position, contact}, ... ], ... }
+
+    ZMIANA: przekazujemy do szablonu WSZYSTKICH pracowników ze WSZYSTKICH działów:
+      - all_employees {dept: [names]}
+      - employees_meta {name: {contact, position, department}}
+    """
+    if request.session.get("auth_group") != group:
+        return redirect("login", group=group)
+
+    # 1) Data z query stringa -> default: dziś (Europe/Warsaw zakładamy po stronie appki)
+    from datetime import date as _date
+    date_str = (request.GET.get("date") or request.POST.get("date") or _date.today().isoformat()).strip()
+
+    # 2) Zbierz WSZYSTKICH pracowników z WSZYSTKICH działów
+    groups = load_groups()
+    all_employees_map = defaultdict(list)   # dept -> [names]
+    employees_meta = {}                     # name -> {contact, position, department}
+
+    # Najpierw zapełniamy dla każdego działu
+    for g in groups:
+        dept = g["name"]
+        users_in_dept = load_users_norm(dept)  # [{"name","position","contact"}]
+        for u in users_in_dept:
+            name = u.get("name", "").strip()
+            if not name:
+                continue
+            all_employees_map[dept].append(name)
+            # Uwaga: jeżeli w różnych działach są osoby o tym samym "name",
+            # nadpiszą się — w praktyce najczęściej nazwa jest unikalna.
+            employees_meta[name] = {
+                "contact": u.get("contact", "") or "",
+                "position": u.get("position", "") or "",
+                "department": dept,
+            }
+
+    # Dla zgodności: lista użytkowników tylko bieżącego działu
+    current_users = load_users_norm(group)
+    employee_list = current_users  # pełne dane (name, position, contact)
+    employee_names = [u["name"] for u in current_users]
+
+    # 3) Wczytaj cały słownik planów (per-day); backward compat:
+    plan_path = BASE_DIR / f"{group}_grafik_plan.json"
+    info, error = None, None
+    all_days = {}
+    if plan_path.exists():
+        try:
+            data = json.loads(plan_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                all_days = data
+            elif isinstance(data, list):
+                # stary format -> podepnij pod obecną datę (bez niszczenia pliku na GET)
+                all_days = {date_str: data}
+            else:
+                all_days = {}
+        except Exception:
+            all_days = {}
+            error = "Nie udało się wczytać wcześniejszego szkicu (uszkodzony plik)."
+
+    # 4) POST: zapisz rows dla bieżącego date_str
+    if request.method == "POST":
+        emps = request.POST.getlist("emp[]")
+        poss = request.POST.getlist("pos[]")
+        conts = request.POST.getlist("contact[]")
+
+        rows = []
+        for i in range(max(len(emps), len(poss), len(conts))):
+            name = (emps[i] if i < len(emps) else "").strip()
+            pos = (poss[i] if i < len(poss) else "").strip()
+            contact = (conts[i] if i < len(conts) else "").strip()
+            if not (name or pos or contact):
+                continue
+            rows.append({"name": name, "position": pos, "contact": contact})
+
+        # zaktualizuj słownik i zapisz
+        all_days[date_str] = rows
+        try:
+            with plan_path.open("w", encoding="utf-8") as f:
+                json.dump(all_days, f, ensure_ascii=False, indent=2)
+            info = f"Zapisano {len(rows)} wierszy dla {date_str}."
+        except Exception as e:
+            error = f"Nie udało się zapisać: {e}"
+
+        # PRG – wróć na GET z tą samą datą (żeby odświeżyć UI bez ponownego POST-u)
+        return redirect(f"{request.path}?date={date_str}")
+
+    # 5) GET: rows dla wybranej daty
+    rows = all_days.get(date_str, [])
+
+    return render(
+        request,
+        "pierwsza_app/grafik.html",
+        {
+            "group": group,
+            "date_str": date_str,                 # ← aktualny dzień w ISO
+            "rows": rows,                         # list[{"name","position","contact"}]
+
+            # Stare klucze (dla zgodności ze starym templatem)
+            "employee_names": employee_names,
+            "employee_list": employee_list,       # tylko bieżący dział
+
+            # NOWE – do pełnej listy i kolorowania "spoza działu"
+            "all_employees": dict(all_employees_map),  # {dept: [names]}
+            "employees_meta": employees_meta,          # {name: {..., department}}
+            "info": info,
+            "error": error,
+        },
+    )
+
+
+# =======================
+#  USTAW GRAFIK (skrót)
+# =======================
+@never_cache
+def set_schedule(request, group):
+    """
+    Skrót pod przycisk „Ustaw grafik”.
+    Kontrola sesji + przekierowanie do edycji z podanym miesiącem/rokiem (GET lub domyślne).
+    """
+    if request.session.get("auth_group") != group:
+        return redirect("login", group=group)
+
+    # Przyjmij miesiąc/rok z query stringa (jeśli klik na link) lub domyślne.
+    month = request.GET.get("month", "Styczeń")
+    year = request.GET.get("year", "2025")
+    return redirect(f"/edycja/{group}/?month={month}&year={year}")
 
 
 # =======================
@@ -610,7 +766,7 @@ def edit_table(request, group):
     month = request.GET.get("month", "Styczeń")
     year = request.GET.get("year", "2025")
 
-    users = load_users_norm(group)                  # lista dictów {"name","position"}
+    users = load_users_norm(group)                  # lista dictów {"name","position","contact"}
     existing = load_month_data(group, month, year)  # {name: [dni...]}
     days_list = list(range(1, days_in_month(month, year) + 1))
 
