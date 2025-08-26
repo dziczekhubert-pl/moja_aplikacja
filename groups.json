@@ -1,12 +1,12 @@
 [
   {
-    "name": "Labolatorium 1",
+    "name": "Kardiologia",
     "login": "Milena",
     "password": "123"
   },
   {
-    "name": "Plasterkownia",
-    "login": "Milena",
+    "name": "SOR",
+    "login": "Hubert",
     "password": "123"
   }
 ]

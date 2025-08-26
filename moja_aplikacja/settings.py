@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'pierwsza_app',
+    'schedule.apps.ScheduleConfig',  # <--- DODAJ TO
 ]
 
 # === Middleware ===

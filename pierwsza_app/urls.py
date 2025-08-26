@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include
 from .views import (
     start,
     login_view,
@@ -9,7 +9,7 @@ from .views import (
     edit_table,
     autosave_cell,
     logout_view,
-    grafik_view,   # <-- NOWO: importujemy nowy widok
+    grafik_view,
 )
 
 urlpatterns = [
@@ -21,6 +21,8 @@ urlpatterns = [
     path("tabela/<str:group>/", tabela, name="tabela"),
     path("edycja/<str:group>/", edit_table, name="edit_table"),
     path("edycja/<str:group>/autosave/", autosave_cell, name="autosave_cell"),
-    path("grafik/<str:group>/", grafik_view, name="grafik"),  # <-- TU kierujemy na nowy ekran
+    path("grafik/<str:group>/", grafik_view, name="grafik"),
+    # API do schematów:
+    path("api/", include("schedule.urls")),   # lub path("", include("schedule.urls")) jeśli ścieżki zaczynają się od 'api/templates/...'
     path("logout/<str:group>/", logout_view, name="logout"),
 ]

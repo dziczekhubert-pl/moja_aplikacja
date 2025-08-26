@@ -309,21 +309,68 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(picker){ picker.addEventListener('change',()=>{ if(hidden) hidden.value=picker.value; window.location.href=`${window.location.pathname}?date=${picker.value}`; }); }
 });
 
-/* ====== Schematy (LocalStorage) – widoczne tylko w obrębie działu ====== */
-const TPL_LS_KEY='grafik_templates_v1';
-const TPL_KEY = `${TPL_LS_KEY}::${CURRENT_GROUP}`; // klucz namespacowany działem
-const TplStore={
-  _key(){ return TPL_KEY; },
-  all(){
-    try{ return JSON.parse(localStorage.getItem(this._key())||'{}'); } catch{ return {}; }
+/* ====== Schematy (Server + LocalStorage fallback) ====== */
+const TPL_LS_KEY = 'grafik_templates_v1';
+const TPL_KEY = `${TPL_LS_KEY}::${CURRENT_GROUP}`;
+
+function getCSRFCookie(name) {
+  const value = `; ${document.cookie}`.split(`; ${name}=`);
+  if (value.length === 2) return value.pop().split(';').shift();
+}
+
+const TplStore = {
+  // --- fallback local ---
+  _local_all(){ try{ return JSON.parse(localStorage.getItem(TPL_KEY)||'{}'); } catch{ return {}; } },
+  _local_saveAll(o){ localStorage.setItem(TPL_KEY, JSON.stringify(o)); },
+  _local_upsert(name, positions){ const d=this._local_all(); d[name]={name, positions, group: CURRENT_GROUP}; this._local_saveAll(d); },
+  _local_remove(name){ const d=this._local_all(); delete d[name]; this._local_saveAll(d); },
+
+  // --- server helpers ---
+  _urlList(){ return `/api/templates/${encodeURIComponent(CURRENT_GROUP)}/`; },
+  _urlItem(name){ return `/api/templates/${encodeURIComponent(CURRENT_GROUP)}/${encodeURIComponent(name)}/`; },
+  async _fetch(url, opts={}){
+    const headers = opts.headers || {};
+    headers['Content-Type'] = 'application/json';
+    if (['POST','PUT','DELETE'].includes(opts.method||'GET')) {
+      headers['X-CSRFToken'] = getCSRFCookie('csrftoken');
+    }
+    const res = await fetch(url, { ...opts, headers, credentials: 'same-origin' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
   },
-  saveAll(o){ localStorage.setItem(this._key(), JSON.stringify(o)); },
-  upsert(name, positions){
-    const data=this.all();
-    data[name]={ name, positions, group: CURRENT_GROUP };
-    this.saveAll(data);
+
+  async all(){
+    try {
+      const data = await this._fetch(this._urlList());
+      const byName = {};
+      (data.items||[]).forEach(it => { byName[it.name] = { name: it.name, positions: it.positions, group: it.group }; });
+      this._local_saveAll(byName); // mirror do local
+      return byName;
+    } catch (e) {
+      console.warn('Templates API unavailable, using localStorage', e);
+      return this._local_all();
+    }
   },
-  remove(name){ const data=this.all(); delete data[name]; this.saveAll(data); }
+
+  async upsert(name, positions){
+    try {
+      await this._fetch(this._urlList(), { method: 'POST', body: JSON.stringify({ name, positions }) });
+      this._local_upsert(name, positions);
+    } catch (e) {
+      console.warn('POST fallback to localStorage', e);
+      this._local_upsert(name, positions);
+    }
+  },
+
+  async remove(name){
+    try {
+      await this._fetch(this._urlItem(name), { method: 'DELETE' });
+      this._local_remove(name);
+    } catch (e) {
+      console.warn('DELETE fallback to localStorage', e);
+      this._local_remove(name);
+    }
+  }
 };
 
 const $=sel=>document.querySelector(sel);
@@ -334,16 +381,17 @@ $('#loadTplBtn')?.addEventListener('click',   ()=>openLoadTpl());
 $('#tplCancel')?.addEventListener('click',    ()=>closeCreateTpl());
 $('#tplCloseLoad')?.addEventListener('click', ()=>closeLoadTpl());
 
-function openCreateTpl(editName=null){
+async function openCreateTpl(editName=null){
   $('#tplModalTitle').textContent = editName ? 'Edytuj schemat' : 'Nowy schemat';
   $('#tplEditingName').value = editName || '';
   const box=$('#tplPositionsBox'); box.innerHTML='';
   if(editName){
-    const t=TplStore.all()[editName];
+    const all = await TplStore.all();
+    const t=all[editName];
     $('#tplName').value = t?.name || editName;
     const len = (t?.positions?.length || 1);
     $('#tplRowsCount').value = len;
-    t?.positions?.forEach((p,i)=>{
+    (t?.positions||[]).forEach((p,i)=>{
       const row=document.createElement('div'); row.className='row-item'; row.style.background='#fff';
       row.innerHTML = `<span style="width:28px;">${i+1}.</span><input type="text" class="tpl-pos" value="${p.replaceAll('"','&quot;')}" style="flex:1">`;
       box.appendChild(row);
@@ -355,7 +403,8 @@ function openCreateTpl(editName=null){
   createModal.onkeydown = (e)=>{ if(e.key==='Enter') { e.preventDefault(); saveTemplate(); } };
 }
 function closeCreateTpl(){ createModal.style.display='none'; createModal.setAttribute('aria-hidden','true'); createModal.onkeydown=null; }
-function openLoadTpl(){ renderTplList(); loadModal.style.display='block'; loadModal.setAttribute('aria-hidden','false'); }
+
+async function openLoadTpl(){ await renderTplList(); loadModal.style.display='block'; loadModal.setAttribute('aria-hidden','false'); }
 function closeLoadTpl(){ loadModal.style.display='none'; loadModal.setAttribute('aria-hidden','true'); }
 
 $('#tplBuildRows')?.addEventListener('click', ()=>{
@@ -370,20 +419,20 @@ $('#tplBuildRows')?.addEventListener('click', ()=>{
 
 $('#tplSave')?.addEventListener('click', saveTemplate);
 
-function saveTemplate(){
+async function saveTemplate(){
   const oldName = ($('#tplEditingName').value || '').trim();
   const name    = ($('#tplName').value || '').trim();
   if(!name){ alert('Podaj nazwę schematu.'); return; }
   const positions = [...document.querySelectorAll('.tpl-pos')].map(i=>(i.value||'').trim());
   if(!positions.length || positions.some(p=>!p)){ alert('Uzupełnij wszystkie stanowiska.'); return; }
-  if(oldName && oldName !== name){ TplStore.remove(oldName); }
-  TplStore.upsert(name, positions);
+  if(oldName && oldName !== name){ await TplStore.remove(oldName); }
+  await TplStore.upsert(name, positions);
   closeCreateTpl();
   renderTplList();
 }
 
-function renderTplList(){
-  const data=TplStore.all();
+async function renderTplList(){
+  const data=await TplStore.all();
   const box=$('#tplList');
   const names=Object.keys(data);
   if(!names.length){ box.innerHTML='<div class="msg info">Brak schematów w tym dziale.</div>'; return; }
@@ -405,7 +454,7 @@ function renderTplList(){
   box.querySelectorAll('.tpl-apply').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const name = decodeURIComponent(btn.dataset.name);
-      const t = TplStore.all()[name];
+      const t = data[name];
       if(!t){ alert('Nie znaleziono schematu.'); return; }
       rowsBody.innerHTML=''; (t.positions||[]).forEach(p=>addRow({pos:p}));
       closeLoadTpl();
@@ -419,10 +468,10 @@ function renderTplList(){
     });
   });
   box.querySelectorAll('.tpl-del').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
+    btn.addEventListener('click', async ()=>{
       const name = decodeURIComponent(btn.dataset.name);
       if(confirm(`Usunąć schemat "${name}"?`)){
-        TplStore.remove(name);
+        await TplStore.remove(name);
         renderTplList();
       }
     });

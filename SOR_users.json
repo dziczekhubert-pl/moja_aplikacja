@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Jan",
+    "position": "Lekarz",
+    "contact": "456789123"
+  },
+  {
+    "name": "Zosia",
+    "position": "Pielęgniarka",
+    "contact": "987654321"
+  }
+]
