@@ -88,13 +88,14 @@
     <button type="button" onclick="goToday()">Dziś</button>
 
     <span style="flex:1 1 auto"></span>
-
+    <button type="button" id="addRowBtn">Dodaj wiersz</button>
     <button type="button" id="createTplBtn">Stwórz schemat</button>
     <button type="button" id="loadTplBtn">Wczytaj schemat</button>
+    <button type="button" id="openOutlookBtn" style="margin-left:8px;">Powiadom mailem</button>
 
-    <button type="button" id="addRowBtn">Dodaj wiersz</button>
+    
     <button type="button" id="clearAllBtn" onclick="if(confirm('Usunąć wszystkie wiersze?')) clearAllRows()">Wyczyść</button>
-    <a href="{% url 'panel' group %}" class="btn">← Wróć do panelu</a>
+    <a href="{% url 'panel' group %}" class="btn">Wróć do panelu</a>
   </div>
 
   <!-- Formularz grafiku -->
@@ -105,7 +106,6 @@
     <!-- Dane pracowników (WSZYSCY) -->
     <script>
       const CURRENT_GROUP = "{{ group|escapejs }}";
-      // EMP_DATA budujemy z employees_meta (pełna baza), a nie z employee_list
       const EMP_DATA = {
         {% if employees_meta %}
           {% for nm, meta in employees_meta.items %}
@@ -115,22 +115,18 @@
               "department": "{{ meta.department|default:''|escapejs }}"
             }{% if not forloop.last %},{% endif %}
           {% endfor %}
-        {% else %}
-        {% endif %}
+        {% else %}{% endif %}
       };
     </script>
 
     <!-- Opcje selecta pracowników -->
     <template id="empOptionsTemplate">
-      <option value="">-----</option> <!-- pusta opcja na górze -->
+      <option value="">-----</option>
       {% if all_employees %}
         {% for dept, emps in all_employees.items %}
           <optgroup label="{{ dept }}">
             {% for e in emps %}
-              <option
-                value="{{ e|escape }}"
-                data-dept="{{ dept|escape }}"
-              >{{ e }}</option>
+              <option value="{{ e|escape }}" data-dept="{{ dept|escape }}">{{ e }}</option>
             {% endfor %}
           </optgroup>
         {% endfor %}
@@ -165,9 +161,7 @@
           </select>
           <input type="text" name="pos[]" value="{{ r.position|default:'' }}" placeholder="Stanowisko">
           <input type="text" name="contact[]" value="{{ r.contact|default:'' }}" placeholder="email lub telefon" readonly class="readonly">
-          <div class="row-actions">
-            <button type="button" onclick="removeRow(this)">✕</button>
-          </div>
+          <div class="row-actions"><button type="button" onclick="removeRow(this)">✕</button></div>
         </div>
         {% endfor %}
       {% else %}
@@ -178,11 +172,7 @@
               {% for dept, emps in all_employees.items %}
                 <optgroup label="{{ dept }}">
                   {% for e in emps %}
-                    <option
-                      value="{{ e|escape }}"
-                      data-dept="{{ dept|escape }}"
-                      class="{% if dept != group %}opt-outside{% endif %}"
-                    >{{ e }}</option>
+                    <option value="{{ e|escape }}" data-dept="{{ dept|escape }}" class="{% if dept != group %}opt-outside{% endif %}">{{ e }}</option>
                   {% endfor %}
                 </optgroup>
               {% endfor %}
@@ -261,27 +251,16 @@ if(addRowBtn){ addRowBtn.addEventListener('click',()=>addRow()); }
 function markSelectColor(sel){
   const opt = sel.options[sel.selectedIndex];
   const dept = opt && opt.dataset ? opt.dataset.dept : '';
-  // Koloruj tylko, gdy wybrano pracownika i jest spoza działu
   sel.style.color = (dept && dept !== CURRENT_GROUP) ? 'var(--red)' : 'inherit';
 }
 
 function addRow(prefill={emp:'',pos:'',contact:''}){
   const wrap=document.createElement('div'); wrap.className='row-item';
   const select=document.createElement('select'); select.name='emp[]'; select.innerHTML=empOptionsTemplate.innerHTML; select.onchange=function(){applyEmployeeData(this)};
-
-  // Ustawiamy domyślnie '-----' (wartość pusta), chyba że podano poprawny prefill.emp
-  if (prefill.emp && [...select.options].some(o=>o.value===prefill.emp)) {
-    select.value = prefill.emp;
-  } else {
-    select.value = ''; // wymusza '-----'
-  }
-
+  if (prefill.emp && [...select.options].some(o=>o.value===prefill.emp)) select.value = prefill.emp; else select.value = '';
   const pos=document.createElement('input'); pos.type='text'; pos.name='pos[]'; pos.placeholder='Stanowisko'; pos.value=prefill.pos||'';
   const contact=document.createElement('input'); contact.type='text'; contact.name='contact[]'; contact.placeholder='email lub telefon'; contact.readOnly=true; contact.classList.add('readonly'); contact.value=prefill.contact||'';
-  const actions=document.createElement('div');
-  actions.className='row-actions';
-  actions.innerHTML = `<button type="button" onclick="removeRow(this)">✕</button>`;
-
+  const actions=document.createElement('div'); actions.className='row-actions'; actions.innerHTML = `<button type="button" onclick="removeRow(this)">✕</button>`;
   wrap.appendChild(select); wrap.appendChild(pos); wrap.appendChild(contact); wrap.appendChild(actions);
   rowsBody.appendChild(wrap);
   applyEmployeeData(select);
@@ -294,7 +273,7 @@ function applyEmployeeData(sel){
   const name=sel.value;
   const contact=row.querySelector('input[name="contact[]"]');
   const meta = EMP_DATA && EMP_DATA[name] ? EMP_DATA[name] : null;
-  if(contact){ contact.value = name ? (meta?.contact || '') : ''; } // czyść dla '-----'
+  if(contact){ contact.value = name ? (meta?.contact || '') : ''; }
   markSelectColor(sel);
 }
 
@@ -319,21 +298,17 @@ function getCSRFCookie(name) {
 }
 
 const TplStore = {
-  // --- fallback local ---
   _local_all(){ try{ return JSON.parse(localStorage.getItem(TPL_KEY)||'{}'); } catch{ return {}; } },
   _local_saveAll(o){ localStorage.setItem(TPL_KEY, JSON.stringify(o)); },
   _local_upsert(name, positions){ const d=this._local_all(); d[name]={name, positions, group: CURRENT_GROUP}; this._local_saveAll(d); },
   _local_remove(name){ const d=this._local_all(); delete d[name]; this._local_saveAll(d); },
 
-  // --- server helpers ---
   _urlList(){ return `/api/templates/${encodeURIComponent(CURRENT_GROUP)}/`; },
   _urlItem(name){ return `/api/templates/${encodeURIComponent(CURRENT_GROUP)}/${encodeURIComponent(name)}/`; },
   async _fetch(url, opts={}){
     const headers = opts.headers || {};
     headers['Content-Type'] = 'application/json';
-    if (['POST','PUT','DELETE'].includes(opts.method||'GET')) {
-      headers['X-CSRFToken'] = getCSRFCookie('csrftoken');
-    }
+    if (['POST','PUT','DELETE'].includes(opts.method||'GET')) headers['X-CSRFToken'] = getCSRFCookie('csrftoken');
     const res = await fetch(url, { ...opts, headers, credentials: 'same-origin' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
@@ -344,7 +319,7 @@ const TplStore = {
       const data = await this._fetch(this._urlList());
       const byName = {};
       (data.items||[]).forEach(it => { byName[it.name] = { name: it.name, positions: it.positions, group: it.group }; });
-      this._local_saveAll(byName); // mirror do local
+      this._local_saveAll(byName);
       return byName;
     } catch (e) {
       console.warn('Templates API unavailable, using localStorage', e);
@@ -353,23 +328,15 @@ const TplStore = {
   },
 
   async upsert(name, positions){
-    try {
-      await this._fetch(this._urlList(), { method: 'POST', body: JSON.stringify({ name, positions }) });
-      this._local_upsert(name, positions);
-    } catch (e) {
-      console.warn('POST fallback to localStorage', e);
-      this._local_upsert(name, positions);
-    }
+    try { await this._fetch(this._urlList(), { method: 'POST', body: JSON.stringify({ name, positions }) });
+          this._local_upsert(name, positions);
+    } catch (e) { console.warn('POST fallback to localStorage', e); this._local_upsert(name, positions); }
   },
 
   async remove(name){
-    try {
-      await this._fetch(this._urlItem(name), { method: 'DELETE' });
-      this._local_remove(name);
-    } catch (e) {
-      console.warn('DELETE fallback to localStorage', e);
-      this._local_remove(name);
-    }
+    try { await this._fetch(this._urlItem(name), { method: 'DELETE' });
+          this._local_remove(name);
+    } catch (e) { console.warn('DELETE fallback to localStorage', e); this._local_remove(name); }
   }
 };
 
@@ -477,6 +444,82 @@ async function renderTplList(){
     });
   });
 }
+
+/* ====== Powiadom e-mailem (przez backend) ====== */
+function isEmail(x){ return typeof x === 'string' && x.includes('@') && !x.includes(' '); }
+
+function buildEmailPayload(){
+  const dateStr = document.getElementById('hiddenDate')?.value || '';
+  const subject = `Grafik ${CURRENT_GROUP} — ${dateStr}`;
+
+  const rows = [...document.querySelectorAll('#rowsBody .row-item')].map(r=>{
+    const name = r.querySelector('select[name="emp[]"]')?.value || '';
+    const pos  = r.querySelector('input[name="pos[]"]')?.value || '';
+    const cnt  = r.querySelector('input[name="contact[]"]')?.value || '';
+    return {name, pos, contact: cnt};
+  });
+
+  const recipients = [...new Set(rows.map(r=>r.contact).filter(isEmail))];
+
+  const lines = [
+    `Grafik dla działu: ${CURRENT_GROUP}`,
+    `Data: ${dateStr}`,
+    ``,
+    ...rows.map(r => `- ${r.name || '—'}: ${r.pos || '—'}`)
+  ];
+  const message = lines.join('\n');
+
+  return {date: dateStr, subject, message, recipients};
+}
+
+document.getElementById('notifyEmailBtn')?.addEventListener('click', async ()=>{
+  const payload = buildEmailPayload();
+  if (!payload.recipients.length){
+    alert('Brak adresów e-mail w kolumnie „email lub telefon”.');
+    return;
+  }
+  try{
+    const res = await fetch(`/grafik/${encodeURIComponent(CURRENT_GROUP)}/notify-email/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCSRFCookie('csrftoken')
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if(!res.ok || data.status !== 'ok') throw new Error(data.msg || 'Błąd wysyłki');
+    alert('Wysłano e-maile.');
+  }catch(err){
+    alert('Nie udało się wysłać e-maili: ' + err.message);
+  }
+});
+
+/* ====== Otwórz w Outlooku (mailto:) ====== */
+function enc(s){ return encodeURIComponent(s); }
+function withCRLF(s){ return String(s||'').replace(/\n/g, '\r\n'); }
+
+document.getElementById('openOutlookBtn')?.addEventListener('click', ()=>{
+  const payload = buildEmailPayload();
+
+  if (!payload.recipients.length){
+    alert('Brak adresów e-mail w kolumnie „email lub telefon”.');
+    return;
+  }
+
+  const toField = ''; // zostaw puste "Do:"
+  const bccField = payload.recipients.join(';'); // Outlook akceptuje średniki
+
+  const subject = payload.subject || `Grafik ${CURRENT_GROUP} — ${payload.date || ''}`;
+  const body = withCRLF(payload.message || '');
+
+  let url = `mailto:${enc(toField)}?subject=${enc(subject)}&body=${enc(body)}`;
+  if (bccField) url += `&bcc=${enc(bccField)}`;
+
+  // Otwórz domyślnego klienta poczty (Outlook)
+  window.location.href = url;
+});
 
 /* Opcjonalne przesuwanie wierszy */
 function moveUp(btn){

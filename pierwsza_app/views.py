@@ -3,11 +3,13 @@ from django.http import HttpResponse, FileResponse, HttpResponseRedirect, JsonRe
 from django.conf import settings
 from django.views.decorators.http import require_POST
 from django.views.decorators.cache import never_cache
+from django.core.mail import send_mail, BadHeaderError  # <-- WAŻNE: import wysyłki maili
 from pathlib import Path
 from datetime import date, timedelta
 from collections import defaultdict
 import os
 import json
+import re
 
 from .utils import (
     POLISH_MONTHS,
@@ -27,6 +29,64 @@ try:
     from .core.pdf_karty import generate_karty_pdf_response  # <- ZAIMPLEMENTUJ analogicznie jak pdf_grafik
 except Exception:
     generate_karty_pdf_response = None
+
+
+# =======================
+#  WYSYŁKA E-MAILI
+# =======================
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+@require_POST
+@never_cache
+def notify_email(request, group):
+    """
+    Endpoint: POST /grafik/<group>/notify-email/
+    Body (JSON):
+      {
+        "subject": "...",
+        "message": "...",
+        "recipients": ["a@b.com", ...]
+      }
+    Zwraca:
+      { "ok": true, "sent": <int> } lub { "ok": false, "detail": "..." }
+    """
+    # Wymuś aktywną sesję (jak w innych widokach)
+    if request.session.get("auth_group") != group:
+        # 401/403 psują prostotę po stronie frontu – zwrócimy 401:
+        return JsonResponse({"ok": False, "detail": "Nie zalogowano do tego działu."}, status=401)
+
+    try:
+        data = json.loads(request.body.decode("utf-8"))
+    except Exception as e:
+        return JsonResponse({"ok": False, "detail": f"Nieprawidłowy JSON: {e}"}, status=400)
+
+    subject = (data.get("subject") or f"Grafik {group}").strip()
+    message = (data.get("message") or f"Został zaktualizowany grafik dla działu {group}.").strip()
+    recipients = data.get("recipients") or []
+
+    # Walidacja adresów e-mail
+    if not isinstance(recipients, list):
+        return JsonResponse({"ok": False, "detail": "Pole 'recipients' musi być listą."}, status=400)
+
+    recipients = [r.strip() for r in recipients if isinstance(r, str) and EMAIL_RE.match(r.strip())]
+    if not recipients:
+        return JsonResponse({"ok": False, "detail": "Brak poprawnych adresów e-mail."}, status=400)
+
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com")
+
+    try:
+        sent = send_mail(
+            subject=subject,
+            message=message,
+            from_email=from_email,   # użyje DEFAULT_FROM_EMAIL
+            recipient_list=recipients,
+            fail_silently=False,
+        )
+        return JsonResponse({"ok": True, "sent": int(sent)})
+    except BadHeaderError:
+        return JsonResponse({"ok": False, "detail": "Nieprawidłowy nagłówek e-mail."}, status=400)
+    except Exception as e:
+        return JsonResponse({"ok": False, "detail": f"Błąd wysyłki: {e}"}, status=500)
 
 
 # =======================

@@ -1,27 +1,18 @@
 """
 Django settings for moja_aplikacja project.
-Dostosowane pod deploy na Render.
 """
 
 from pathlib import Path
 import os
 import dj_database_url
 
-# === Ścieżki ===
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # === Bezpieczeństwo / tryb ===
-# Na produkcji ustawimy SECRET_KEY w zmiennych środowiskowych (Render → Environment)
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key")
-DEBUG = os.environ.get("DEBUG", "False").lower() == "true"
+DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
 
-# Render podaje nazwę hosta w RENDER_EXTERNAL_HOSTNAME
-ALLOWED_HOSTS = [os.environ.get("RENDER_EXTERNAL_HOSTNAME", ""), "localhost", "127.0.0.1"]
-
-# CSRF na produkcji (gdy Render ustawi hosta)
-render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
-if render_host:
-    CSRF_TRUSTED_ORIGINS = [f"https://{render_host}"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
 # === Aplikacje ===
 INSTALLED_APPS = [
@@ -33,13 +24,13 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'pierwsza_app',
-    'schedule.apps.ScheduleConfig',  # <--- DODAJ TO
+    'schedule.apps.ScheduleConfig',
 ]
 
 # === Middleware ===
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # serwowanie statyków w produkcji
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -54,7 +45,7 @@ ROOT_URLCONF = 'moja_aplikacja.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],  # jeśli masz globalny katalog szablonów, dodaj ścieżkę
+        'DIRS': [],  # tu możesz podać katalog globalnych szablonów
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -69,10 +60,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'moja_aplikacja.wsgi.application'
 
 # === Baza danych ===
-# Jeśli jest DATABASE_URL (Render/Postgres) -> użyj go z SSL,
-# jeśli nie ma -> lokalnie użyj sqlite bez SSL (żeby nie było błędu sslmode przy sqlite).
 DATABASE_URL = os.environ.get("DATABASE_URL")
-
 if DATABASE_URL:
     DATABASES = {
         "default": dj_database_url.config(
@@ -97,15 +85,20 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # === Internationalization ===
-LANGUAGE_CODE = 'en-us'     # Możesz zmienić na 'pl'
-TIME_ZONE = 'UTC'           # Możesz zmienić na 'Europe/Warsaw'
+LANGUAGE_CODE = 'pl'
+TIME_ZONE = 'Europe/Warsaw'
 USE_I18N = True
 USE_TZ = True
 
-# === Statyczne pliki (CSS/JS/obrazki) ===
+# === Statyczne pliki ===
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# === Klucz domyślny ===
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# === E-mail (tryb testowy) ===
+# Wszystkie wysyłane maile pokażą się w konsoli (okno runserver)
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+DEFAULT_FROM_EMAIL = "no-reply@example.com"
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
