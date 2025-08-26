@@ -1,0 +1,4 @@
+Set-Content -Path runtime.txt -Value "3.12.4"
+git add runtime.txt
+git commit -m "Add runtime.txt for Render Python 3.12"
+git push

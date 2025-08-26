@@ -12,7 +12,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key")
 DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+# Dopuść localhost oraz domeny Render
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", ".onrender.com"]
+
+# Ustal CSRF_TRUSTED_ORIGINS z adresu nadawanego przez Render (jeśli dostępny)
+RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
+CSRF_TRUSTED_ORIGINS = []
+if RENDER_EXTERNAL_URL:
+    # Django wymaga pełnego origin z protokołem https
+    CSRF_TRUSTED_ORIGINS = [RENDER_EXTERNAL_URL.replace("http://", "https://")]
+
+# Produkcyjne nagłówki / cookies za proxy (Render)
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 # === Aplikacje ===
 INSTALLED_APPS = [
@@ -97,8 +111,11 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# === E-mail (tryb testowy) ===
-# Wszystkie wysyłane maile pokażą się w konsoli (okno runserver)
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-DEFAULT_FROM_EMAIL = "no-reply@example.com"
-SERVER_EMAIL = DEFAULT_FROM_EMAIL
+# === E-mail (zamiast twardych danych użyj zmiennych środowiskowych) ===
+EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True").lower() == "true"
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "webmaster@localhost")
