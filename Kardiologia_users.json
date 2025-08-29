@@ -2,11 +2,23 @@
   {
     "name": "Milena",
     "position": "Pielęgniarka",
-    "contact": "hubert.dziczek@gmail.com"
+    "contact": "787278585",
+    "email": "dziczek.hubert@gmail.com",
+    "medical_exam": "",
+    "skills": {
+      "sas": true,
+      "sasas": true
+    }
   },
   {
     "name": "Hubert",
     "position": "Lekarz",
-    "contact": "787278588"
+    "contact": "787278588",
+    "email": "dziczek.hubert@gmail.com",
+    "medical_exam": "",
+    "skills": {
+      "sas": true,
+      "sasas": false
+    }
   }
 ]

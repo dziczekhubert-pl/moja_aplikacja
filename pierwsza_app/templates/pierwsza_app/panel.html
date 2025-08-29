@@ -206,7 +206,7 @@
         <th class="lp">Lp</th>
         <th>Nazwisko i imię</th>
         <th>Stanowisko</th>
-        <th>E-mail</th> <!-- NOWA KOLUMNA -->
+        <th>Kontakt</th>
         <th class="num">Dni robocze</th>
         <th class="num">Dni świąteczne</th>
         <th class="num">Chorobowe</th>
@@ -215,11 +215,11 @@
     </thead>
     <tbody>
       {% for row in table_rows %}
-      <tr>
+      <tr data-name="{{ row.name }}" data-email="{{ row.email|default:'' }}">
         <td class="lp">{{ forloop.counter }}</td>
-        <td>{{ row.name }}</td>
+        <td><a href="{% url 'employee_profile' group row.name %}">{{ row.name }}</a></td>
         <td>{{ row.position }}</td>
-        <td>{{ row.contact }}</td> <!-- NOWA KOLUMNA -->
+        <td>{{ row.contact|default:"—" }}</td>
         <td class="num">{{ row.workdays }}</td>
         <td class="num">{{ row.ndz }}</td>
         <td class="num">{{ row.l4 }}</td>
@@ -234,6 +234,7 @@
             <input type="hidden" name="emp" value="{{ row.name }}">
             <button class="small" title="W dół">↓</button>
           </form>
+
           <button type="button" class="small" onclick="toggleForm('editForm{{ forloop.counter }}', true, 'input')">Edytuj</button>
           <form id="editForm{{ forloop.counter }}" class="hidden togglable" method="post">
             {% csrf_token %}
@@ -242,16 +243,18 @@
 
             <input type="text" name="new_emp" value="{{ row.name }}" placeholder="Nazwisko i imię" style="width:180px;">
             <input type="text" name="new_pos" value="{{ row.position }}" placeholder="Stanowisko" style="width:160px;">
-            <input type="text" name="new_contact" value="{{ row.contact }}" placeholder="Kontakt" style="width:160px;"> <!-- NOWE POLE -->
+            <input type="text" name="new_contact" value="{{ row.contact }}" placeholder="Kontakt" style="width:160px;">
 
             <button class="small">Zapisz</button>
           </form>
+
           <form method="post" onsubmit="return confirm('Usunąć {{ row.name }}?');">
             {% csrf_token %}
             <input type="hidden" name="action" value="remove_employee">
             <input type="hidden" name="emp" value="{{ row.name }}">
             <button class="small danger">Usuń</button>
           </form>
+
           <button type="button" class="small" onclick="toggleForm('transferForm{{ forloop.counter }}', true, 'select')">Przenieś</button>
           <form id="transferForm{{ forloop.counter }}" class="hidden togglable" method="post">
             {% csrf_token %}

@@ -1,0 +1,60 @@
+{% extends "pierwsza_app/base.html" %}
+{% block title %}Profil: {{ employee.name }}{% endblock %}
+{% block content %}
+
+<h1>Profil: {{ employee.name }}</h1>
+
+{% if info %}<div class="flash">{{ info }}</div>{% endif %}
+{% if error %}<div class="flash" style="border-color:#e99;background:#fff5f5;">{{ error }}</div>{% endif %}
+
+<form method="post" style="max-width:640px;">
+  {% csrf_token %}
+
+  <label class="muted" for="name">Imię i nazwisko</label>
+  <input id="name" name="name" type="text" value="{{ employee.name }}" required>
+
+  <div style="height:10px;"></div>
+
+  <label class="muted" for="position">Stanowisko</label>
+  <input id="position" name="position" type="text" value="{{ employee.position }}">
+
+  <div style="height:10px;"></div>
+
+  <label class="muted" for="contact">Kontakt (telefon/opis)</label>
+  <input id="contact" name="contact" type="text" value="{{ employee.contact }}">
+
+  <div style="height:10px;"></div>
+
+  <label class="muted" for="email">Kontakt e-mail</label>
+  <input id="email" name="email" type="email" value="{{ employee.email }}">
+
+  <div style="height:10px;"></div>
+
+  <label class="muted" for="medical_exam">Termin badań lekarskich</label>
+  <input id="medical_exam" name="medical_exam" type="date" value="{{ employee.medical_exam }}">
+
+  <hr>
+
+  <label class="muted">Doświadczenie / umiejętności</label>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">
+    {% for sk in skills_catalog %}
+    <label style="display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:8px;padding:6px 10px;background:#fafafa;">
+      <input type="checkbox" name="skills" value="{{ sk }}" {% if sk in emp_skills_on %}checked{% endif %}>
+      <span>{{ sk|title }}</span>
+    </label>
+    {% endfor %}
+  </div>
+
+  <div style="height:10px;"></div>
+
+  <label class="muted" for="new_skill">Dodaj nową umiejętność (globalnie)</label>
+  <input id="new_skill" name="new_skill" type="text" placeholder="np. Wózek widłowy">
+  <small class="muted">Po zapisaniu trafi do katalogu globalnego i zostanie zaznaczona u tego pracownika.</small>
+
+  <div style="height:14px;"></div>
+
+  <button class="btn" type="submit">Zapisz</button>
+  <a class="btn" href="{% url 'panel' group %}">Anuluj</a>
+</form>
+
+{% endblock %}

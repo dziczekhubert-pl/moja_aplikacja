@@ -10,7 +10,8 @@ from .views import (
     autosave_cell,
     logout_view,
     grafik_view,
-    notify_email,   # <-- nowy widok do wysyłki e-maili
+    notify_email,
+    employee_profile,   # <--- DODANE
 )
 
 urlpatterns = [
@@ -23,15 +24,8 @@ urlpatterns = [
     path("edycja/<str:group>/", edit_table, name="edit_table"),
     path("edycja/<str:group>/autosave/", autosave_cell, name="autosave_cell"),
     path("grafik/<str:group>/", grafik_view, name="grafik"),
-    path("grafik/<str:group>/notify-email/", notify_email, name="notify_email"),  # <-- TA LINIA
-    path("api/", include("schedule.urls")),
-    path("logout/<str:group>/", logout_view, name="logout"),
-
-    # NOWE: endpoint do powiadomień e-mail
     path("grafik/<str:group>/notify-email/", notify_email, name="notify_email"),
-
-    # API do schematów (app: schedule)
+    path("profil/<str:group>/<path:emp_name>/", employee_profile, name="employee_profile"),
     path("api/", include("schedule.urls")),
-
     path("logout/<str:group>/", logout_view, name="logout"),
 ]

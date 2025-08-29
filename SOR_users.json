@@ -2,11 +2,17 @@
   {
     "name": "Janusz",
     "position": "Lekarz",
-    "contact": "dziczek.hubert@gmail.com"
+    "contact": "dziczek.hubert@gmail.com",
+    "email": "",
+    "medical_date": "",
+    "skills": []
   },
   {
     "name": "Zosia",
     "position": "Pielęgniarka",
-    "contact": "987654321"
+    "contact": "987654321",
+    "email": "",
+    "medical_date": "",
+    "skills": []
   }
 ]

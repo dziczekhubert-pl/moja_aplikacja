@@ -7,6 +7,7 @@ from django.core.mail import send_mail, BadHeaderError  # <-- WAŻNE: import wys
 from pathlib import Path
 from datetime import date, timedelta
 from collections import defaultdict
+from urllib.parse import unquote
 import os
 import json
 import re
@@ -20,6 +21,38 @@ from .utils import (
 
 # katalog projektu (tam gdzie manage.py)
 BASE_DIR = Path(settings.BASE_DIR)
+SKILLS_FILE = BASE_DIR / "skills_catalog.json"
+
+def load_skill_catalog():
+    try:
+        if SKILLS_FILE.exists():
+            data = json.loads(SKILLS_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                # zwracamy listę unikalnych, przyciętych nazw
+                out = []
+                seen = set()
+                for x in data:
+                    s = str(x).strip()
+                    k = s.casefold()
+                    if s and k not in seen:
+                        seen.add(k)
+                        out.append(s)
+                return out
+    except Exception:
+        pass
+    return []
+
+def save_skill_catalog(catalog):
+    # porządkowanie + zapis
+    uniq = []
+    seen = set()
+    for x in catalog or []:
+        s = str(x).strip()
+        k = s.casefold()
+        if s and k not in seen:
+            seen.add(k)
+            uniq.append(s)
+    SKILLS_FILE.write_text(json.dumps(uniq, ensure_ascii=False, indent=2), encoding="utf-8")
 
 # --- IMPORTY PDF (nowy mechanizm: generowanie w pamięci) ---
 from .core.pdf_grafik import generate_pdf_response as generate_grafik_pdf_response   # <- WYMAGANE
@@ -32,7 +65,7 @@ except Exception:
 
 
 # =======================
-#  WYSYŁKA E-MAILI
+#  WYSYŁKA E-MAILI – tylko e-maile z profilu!
 # =======================
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -40,21 +73,23 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 @never_cache
 def notify_email(request, group):
     """
-    Endpoint: POST /grafik/<group>/notify-email/
+    POST /grafik/<group>/notify-email/
+
     Body (JSON):
       {
-        "subject": "...",
-        "message": "...",
-        "recipients": ["a@b.com", ...]
+        "subject": "...",            # opcjonalnie
+        "message": "...",            # opcjonalnie
+        "employees": ["Milena", ...] # OPCJONALNIE: wyślij tylko do tych osób (po 'name')
+        "extra": ["a@b.com", ...]    # OPCJONALNIE: dodatkowe adresy poza profilami
       }
-    Zwraca:
-      { "ok": true, "sent": <int> } lub { "ok": false, "detail": "..." }
+
+    ZAWSZE zbiera adresy z <group>_users.json -> pole 'email'.
+    Pole 'recipients' (jeśli ktoś wyśle z frontu) jest IGNOROWANE.
     """
-    # Wymuś aktywną sesję (jak w innych widokach)
     if request.session.get("auth_group") != group:
-        # 401/403 psują prostotę po stronie frontu – zwrócimy 401:
         return JsonResponse({"ok": False, "detail": "Nie zalogowano do tego działu."}, status=401)
 
+    # wczytaj JSON
     try:
         data = json.loads(request.body.decode("utf-8"))
     except Exception as e:
@@ -62,15 +97,39 @@ def notify_email(request, group):
 
     subject = (data.get("subject") or f"Grafik {group}").strip()
     message = (data.get("message") or f"Został zaktualizowany grafik dla działu {group}.").strip()
-    recipients = data.get("recipients") or []
 
-    # Walidacja adresów e-mail
-    if not isinstance(recipients, list):
-        return JsonResponse({"ok": False, "detail": "Pole 'recipients' musi być listą."}, status=400)
+    # 1) Wczytaj pracowników działu (z rozszerzonymi polami)
+    users = load_users_norm(group)  # [{"name","position","contact","email","medical_exam","skills"}]
 
-    recipients = [r.strip() for r in recipients if isinstance(r, str) and EMAIL_RE.match(r.strip())]
+    # 2) Ewentualny filtr po nazwach
+    only_names = set(data.get("employees") or []) if isinstance(data.get("employees"), list) else None
+
+    # 3) Zbuduj listę odbiorców TYLKO z e-maili w profilach
+    recipients = []
+    missing_email_for = []  # nazwy osób bez e-maila, przydatne w odpowiedzi
+
+    for u in users:
+        if only_names and u.get("name") not in only_names:
+            continue
+        email = (u.get("email") or "").strip()
+        if email and EMAIL_RE.match(email):
+            recipients.append(email)
+        else:
+            if only_names:  # raportuj brak tylko dla żądanych
+                missing_email_for.append(u.get("name") or "")
+
+    # 4) Dodatkowe adresy (opcjonalnie)
+    extras = data.get("extra") if isinstance(data.get("extra"), list) else []
+    extras = [e.strip() for e in extras if isinstance(e, str) and EMAIL_RE.match(e.strip())]
+
+    # 5) Deduplikacja
+    recipients = sorted(set(recipients + extras))
+
     if not recipients:
-        return JsonResponse({"ok": False, "detail": "Brak poprawnych adresów e-mail."}, status=400)
+        detail = "Brak poprawnych adresów e-mail w profilach."
+        if missing_email_for:
+            detail += f" Brak e-maili dla: {', '.join(missing_email_for)}."
+        return JsonResponse({"ok": False, "detail": detail}, status=400)
 
     from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com")
 
@@ -78,15 +137,23 @@ def notify_email(request, group):
         sent = send_mail(
             subject=subject,
             message=message,
-            from_email=from_email,   # użyje DEFAULT_FROM_EMAIL
+            from_email=from_email,
             recipient_list=recipients,
             fail_silently=False,
         )
-        return JsonResponse({"ok": True, "sent": int(sent)})
+        # Zwrotnie raportujemy, DO KOGO poszło i kogo ominęło (bo brak e-maila)
+        return JsonResponse({
+            "ok": True,
+            "sent": int(sent),
+            "recipients": recipients,
+            "missing_email_for": missing_email_for,
+        })
     except BadHeaderError:
         return JsonResponse({"ok": False, "detail": "Nieprawidłowy nagłówek e-mail."}, status=400)
     except Exception as e:
         return JsonResponse({"ok": False, "detail": f"Błąd wysyłki: {e}"}, status=500)
+
+
 
 
 # =======================
@@ -94,28 +161,49 @@ def notify_email(request, group):
 # =======================
 def normalize_users(users_list):
     """
-    Zwraca listę słowników {"name": "...", "position": "...", "contact": "..."}.
-    Jeśli dostanie listę stringów – konwertuje do nowego formatu.
+    Zwraca listę słowników w formacie:
+    {
+      "name": "...",
+      "position": "...",
+      "contact": "...",   # telefon
+      "email": "...",
+      "medical_exam": "YYYY-MM-DD",
+      "skills": { "<dowolna_nazwa>": bool, ... }
+    }
     """
     norm = []
     for u in users_list or []:
         if isinstance(u, str):
-            norm.append({"name": u, "position": "", "contact": ""})
+            norm.append({
+                "name": u, "position": "", "contact": "",
+                "email": "", "medical_exam": "",
+                "skills": {},
+            })
         elif isinstance(u, dict):
+            # wczytaj skills w elastycznej formie (dict lub lista)
+            raw_sk = u.get("skills")
+            skills = {}
+            if isinstance(raw_sk, dict):
+                for k, v in raw_sk.items():
+                    skills[str(k)] = bool(v)
+            elif isinstance(raw_sk, list):
+                for k in raw_sk:
+                    skills[str(k)] = True
+
             norm.append({
                 "name": (u.get("name") or "").strip(),
                 "position": (u.get("position") or "").strip(),
                 "contact": (u.get("contact") or "").strip(),
+                "email": (u.get("email") or "").strip(),
+                "medical_exam": (u.get("medical_exam") or "").strip(),
+                "skills": skills,
             })
     return norm
 
 
+
+
 def load_users_norm(group):
-    """
-    Wczytaj użytkowników danego działu i upewnij się, że są w nowym formacie
-    (zawierają 'name', 'position', 'contact'). Jeśli były stringi lub brakowało
-    pól – zapisz od razu w nowym formacie (migracja w locie).
-    """
     raw = load_users_from_file(group)
     users = normalize_users(raw)
 
@@ -124,13 +212,15 @@ def load_users_norm(group):
         needs_migration = True
     else:
         for x in (raw or []):
-            if isinstance(x, dict) and ("contact" not in x or "position" not in x):
-                needs_migration = True
-                break
+            if isinstance(x, dict):
+                if any(k not in x for k in ("contact", "position", "email", "medical_date", "skills")):
+                    needs_migration = True
+                    break
 
     if needs_migration:
         save_users_to_file(group, users)
     return users
+
 
 
 # =======================
@@ -468,25 +558,24 @@ def panel(request, group):
         month_years = months_between(from_month, from_year, to_month, to_year)
         stats = count_stats(group, visible_users, month_years)
         for u in visible_users:
-            table_rows.append(
-                {
-                    "name": u["name"],
-                    "position": u.get("position", ""),
-                    "contact": u.get("contact", ""),
-                    "workdays": stats[u["name"]]["workdays"],
-                    "ndz": stats[u["name"]]["ndz"],
-                    "l4": stats[u["name"]]["l4"],
+            table_rows.append({
+    "name": u["name"],
+    "position": u.get("position", ""),
+    "contact": u.get("contact", ""),   # tel do wyświetlania
+    "email": u.get("email", ""),       # <-- to będzie użyte w mailto
+    "workdays": stats[u["name"]]["workdays"],
+    "ndz": stats[u["name"]]["ndz"],
+    "l4": stats[u["name"]]["l4"],
                 }
             )
     else:
         for u in visible_users:
             table_rows.append({
-                "name": u["name"],
-                "position": u.get("position", ""),
-                "contact": u.get("contact", ""),
-                "workdays": 0,
-                "ndz": 0,
-                "l4": 0
+    "name": u["name"],
+    "position": u.get("position", ""),
+    "contact": u.get("contact", ""),
+    "email": u.get("email", ""),       # <-- to samo tutaj
+    "workdays": 0, "ndz": 0, "l4": 0
             })
 
     months = list(POLISH_MONTHS.keys())
@@ -517,45 +606,52 @@ def grafik_view(request, group):
     - POST: zapisuje stan w kluczu wybranego dnia
     Format pliku: { "YYYY-MM-DD": [ {name, position, contact}, ... ], ... }
 
-    ZMIANA: przekazujemy do szablonu WSZYSTKICH pracowników ze WSZYSTKICH działów:
-      - all_employees {dept: [names]}
-      - employees_meta {name: {contact, position, department}}
+    ZMIANA: 'contact' w UI = E-MAIL z profilu (telefon trzymamy jako 'phone').
     """
     if request.session.get("auth_group") != group:
         return redirect("login", group=group)
 
-    # 1) Data z query stringa -> default: dziś (Europe/Warsaw zakładamy po stronie appki)
+    # 1) Data z query stringa -> default: dziś
     from datetime import date as _date
     date_str = (request.GET.get("date") or request.POST.get("date") or _date.today().isoformat()).strip()
 
     # 2) Zbierz WSZYSTKICH pracowników z WSZYSTKICH działów
     groups = load_groups()
     all_employees_map = defaultdict(list)   # dept -> [names]
-    employees_meta = {}                     # name -> {contact, position, department}
+    employees_meta = {}                     # name -> {email, phone, position, department, contact(=email)}
 
-    # Najpierw zapełniamy dla każdego działu
     for g in groups:
         dept = g["name"]
-        users_in_dept = load_users_norm(dept)  # [{"name","position","contact"}]
+        users_in_dept = load_users_norm(dept)  # [{"name","position","contact","email",...}]
         for u in users_in_dept:
-            name = u.get("name", "").strip()
+            name = (u.get("name") or "").strip()
             if not name:
                 continue
+            email = (u.get("email") or "").strip()
+            phone = (u.get("contact") or "").strip()
             all_employees_map[dept].append(name)
-            # Uwaga: jeżeli w różnych działach są osoby o tym samym "name",
-            # nadpiszą się — w praktyce najczęściej nazwa jest unikalna.
+            # Uwaga: 'contact' ustawiamy na E-MAIL, żeby UI zawsze widziało maila
             employees_meta[name] = {
-                "contact": u.get("contact", "") or "",
-                "position": u.get("position", "") or "",
+                "contact": email or phone,     # <<<<<<<<<< kluczowe: kontakt = e-mail
+                "email": email,
+                "phone": phone,
+                "position": (u.get("position") or "").strip(),
                 "department": dept,
             }
 
     # Dla zgodności: lista użytkowników tylko bieżącego działu
     current_users = load_users_norm(group)
-    employee_list = current_users  # pełne dane (name, position, contact)
+    # Podmień 'contact' na E-MAIL także tutaj (stare szablony używają employee_list)
+    employee_list = []
+    for u in current_users:
+        employee_list.append({
+            "name": u["name"],
+            "position": (u.get("position") or "").strip(),
+            "contact": (u.get("email") or u.get("contact") or "").strip(),  # << mail
+        })
     employee_names = [u["name"] for u in current_users]
 
-    # 3) Wczytaj cały słownik planów (per-day); backward compat:
+    # 3) Wczytaj cały słownik planów (per-day)
     plan_path = BASE_DIR / f"{group}_grafik_plan.json"
     info, error = None, None
     all_days = {}
@@ -565,7 +661,6 @@ def grafik_view(request, group):
             if isinstance(data, dict):
                 all_days = data
             elif isinstance(data, list):
-                # stary format -> podepnij pod obecną datę (bez niszczenia pliku na GET)
                 all_days = {date_str: data}
             else:
                 all_days = {}
@@ -577,16 +672,22 @@ def grafik_view(request, group):
     if request.method == "POST":
         emps = request.POST.getlist("emp[]")
         poss = request.POST.getlist("pos[]")
-        conts = request.POST.getlist("contact[]")
+        conts = request.POST.getlist("contact[]")  # w formularzu dalej 'contact', ale my wstawimy tam e-mail
 
         rows = []
         for i in range(max(len(emps), len(poss), len(conts))):
             name = (emps[i] if i < len(emps) else "").strip()
             pos = (poss[i] if i < len(poss) else "").strip()
-            contact = (conts[i] if i < len(conts) else "").strip()
-            if not (name or pos or contact):
+            contact_in = (conts[i] if i < len(conts) else "").strip()
+
+            if not (name or pos or contact_in):
                 continue
-            rows.append({"name": name, "position": pos, "contact": contact})
+
+            # jeżeli wprowadzono nazwę pracownika, preferuj e-mail z profilu
+            email_pref = (employees_meta.get(name, {}) or {}).get("email", "")
+            contact_val = email_pref or contact_in  # zapisuj e-mail gdy dostępny
+
+            rows.append({"name": name, "position": pos, "contact": contact_val})
 
         # zaktualizuj słownik i zapisz
         all_days[date_str] = rows
@@ -597,27 +698,34 @@ def grafik_view(request, group):
         except Exception as e:
             error = f"Nie udało się zapisać: {e}"
 
-        # PRG – wróć na GET z tą samą datą (żeby odświeżyć UI bez ponownego POST-u)
         return redirect(f"{request.path}?date={date_str}")
 
     # 5) GET: rows dla wybranej daty
-    rows = all_days.get(date_str, [])
+    rows = all_days.get(date_str, []) or []
+
+    # Nadpisz pole 'contact' e-mailem z profilu (jeśli istnieje), żeby na widoku był mail, nie telefon
+    for r in rows:
+        n = (r.get("name") or "").strip()
+        email_pref = (employees_meta.get(n, {}) or {}).get("email", "")
+        if email_pref:
+            r["contact"] = email_pref
 
     return render(
         request,
         "pierwsza_app/grafik.html",
         {
             "group": group,
-            "date_str": date_str,                 # ← aktualny dzień w ISO
-            "rows": rows,                         # list[{"name","position","contact"}]
+            "date_str": date_str,
+            "rows": rows,
 
             # Stare klucze (dla zgodności ze starym templatem)
             "employee_names": employee_names,
-            "employee_list": employee_list,       # tylko bieżący dział
+            "employee_list": employee_list,       # tu 'contact' = e-mail
 
-            # NOWE – do pełnej listy i kolorowania "spoza działu"
-            "all_employees": dict(all_employees_map),  # {dept: [names]}
-            "employees_meta": employees_meta,          # {name: {..., department}}
+            # NOWE – pełna lista i meta (tu 'contact' = e-mail)
+            "all_employees": dict(all_employees_map),
+            "employees_meta": employees_meta,
+
             "info": info,
             "error": error,
         },
@@ -903,5 +1011,122 @@ def edit_table(request, group):
             "days": days_list,  # nagłówki dni
             "rows": rows,       # jeśli szablon iteruje po rows
             "values": values,   # jeśli szablon korzysta z values[...] (stara wersja)
+        },
+    )
+
+
+# =======================
+#  PROFIL PRACOWNIKA
+# =======================
+SKILLS_CATALOG = [
+    "kartoniarka",
+    "krajalnica",
+    "vacuum",
+    "paletyzer",
+]
+
+@never_cache
+def employee_profile(request, group, emp_name):
+    """
+    Profil pracownika z edycją:
+      - name, position, contact (tel), email, medical_exam
+      - skills: checkboxy z GLOBALNEGO katalogu + dodawanie nowej umiejętności (globalnie)
+    """
+    if request.session.get("auth_group") != group:
+        return redirect("login", group=group)
+
+    emp_name = unquote(emp_name).strip()
+    users = load_users_norm(group)
+    idx = next((i for i, u in enumerate(users) if u.get("name") == emp_name), None)
+    if idx is None:
+        raise Http404("Nie znaleziono takiego pracownika w tym dziale.")
+
+    employee = users[idx]
+    info = error = None
+
+    # Załaduj katalog globalny
+    catalog = load_skill_catalog()
+
+    if request.method == "POST":
+        new_name = (request.POST.get("name") or "").strip()
+        new_pos = (request.POST.get("position") or "").strip()
+        new_contact = (request.POST.get("contact") or "").strip()
+        new_email = (request.POST.get("email") or "").strip()
+        new_exam = (request.POST.get("medical_exam") or "").strip()
+
+        # Nowa umiejętność (globalna)
+        new_skill = (request.POST.get("new_skill") or "").strip()
+        if new_skill:
+            # dodaj do katalogu globalnego, jeśli nie ma (case-insensitive)
+            if all(new_skill.casefold() != s.casefold() for s in catalog):
+                catalog.append(new_skill)
+                save_skill_catalog(catalog)
+                info = "Dodano nową umiejętność do katalogu globalnego."
+            else:
+                info = "Umiejętność już istnieje w katalogu."
+
+        # zaznaczone umiejętności (checkbox name="skills" value="<nazwa>")
+        selected = set(request.POST.getlist("skills") or [])
+        # Jeśli dodano nową umiejętność – automatycznie ją zaznacz dla tego pracownika
+        if new_skill:
+            selected.add(new_skill)
+
+        # prosta walidacja pól kontaktowych
+        if not new_name:
+            error = "Imię i nazwisko nie może być puste."
+        elif new_email and not EMAIL_RE.match(new_email):
+            error = "Podaj poprawny adres e-mail."
+        elif new_exam and not re.match(r"^\d{4}-\d{2}-\d{2}$", new_exam):
+            error = "Termin badań musi być w formacie RRRR-MM-DD."
+
+        if not error and new_name != employee["name"] and any(u["name"] == new_name for u in users):
+            error = f"Pracownik o nazwie „{new_name}” już istnieje."
+
+        if not error:
+            # Zapis pól prostych
+            users[idx]["name"] = new_name
+            users[idx]["position"] = new_pos
+            users[idx]["contact"] = new_contact
+            users[idx]["email"] = new_email
+            users[idx]["medical_exam"] = new_exam
+
+            # Zapis umiejętności: mapowanie katalog -> bool (zaznaczony czy nie)
+            # UWAGA: używamy aktualnego katalogu (już po ewentualnym dodaniu new_skill)
+            skills_map = {}
+            for s in catalog:
+                skills_map[s] = (s in selected)
+            users[idx]["skills"] = skills_map
+
+            save_users_to_file(group, users)
+            if info:
+                info = "Zapisano zmiany. " + info
+            else:
+                info = "Zapisano zmiany."
+
+            # jeżeli zmieniono nazwę – przekieruj, by adres URL pasował
+            if new_name != emp_name:
+                return redirect("employee_profile", group=group, emp_name=new_name)
+            employee = users[idx]
+
+    # (GET lub po POST) – odśwież employee i katalog (gdyby był dodany)
+    catalog = load_skill_catalog()
+    # Upewnij się, że pokażemy też ewentualne „stare” umiejętności, które nie były jeszcze w katalogu
+    extra_from_user = [k for k in (employee.get("skills") or {}).keys()
+                       if all(k.casefold() != s.casefold() for s in catalog)]
+    full_catalog = catalog + extra_from_user  # kolejność: katalog -> ewentualne dodatkowe klucze użytkownika
+
+    # Lista „włączonych” umiejętności dla szablonu (łatwiej zaznaczyć checkboxy)
+    emp_skills_on = [k for k, v in (employee.get("skills") or {}).items() if v]
+
+    return render(
+        request,
+        "pierwsza_app/employee_profile.html",
+        {
+            "group": group,
+            "employee": employee,
+            "skills_catalog": full_catalog,
+            "emp_skills_on": emp_skills_on,
+            "info": info,
+            "error": error,
         },
     )

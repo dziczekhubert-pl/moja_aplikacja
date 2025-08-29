@@ -15,5 +15,22 @@
       "position": "Pielęgniarka",
       "contact": "987654321"
     }
+  ],
+  "2025-08-05": [
+    {
+      "name": "Hubert",
+      "position": "Lekarz",
+      "contact": "787278588"
+    },
+    {
+      "name": "",
+      "position": "Zabiegowa",
+      "contact": ""
+    },
+    {
+      "name": "",
+      "position": "Pielęgniarka",
+      "contact": ""
+    }
   ]
 }
