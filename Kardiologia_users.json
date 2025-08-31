@@ -1,24 +1,24 @@
 [
   {
-    "name": "Milena",
-    "position": "Pielęgniarka",
-    "contact": "787278585",
-    "email": "dziczek.hubert@gmail.com",
-    "medical_exam": "",
-    "skills": {
-      "sas": true,
-      "sasas": true
-    }
-  },
-  {
     "name": "Hubert",
     "position": "Lekarz",
     "contact": "787278588",
     "email": "dziczek.hubert@gmail.com",
-    "medical_exam": "",
+    "medical_exam": "2025-09-29",
     "skills": {
-      "sas": true,
-      "sasas": false
+      "Praca na SOR": false,
+      "Oddział Kardiologii rehabilitacyjnej": true
+    }
+  },
+  {
+    "name": "Milena",
+    "position": "Pielęgniarka",
+    "contact": "787278585",
+    "email": "hubert501@o2.pl",
+    "medical_exam": "2025-10-12",
+    "skills": {
+      "Praca na SOR": true,
+      "Oddział Kardiologii rehabilitacyjnej": true
     }
   }
 ]

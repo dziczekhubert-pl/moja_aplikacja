@@ -7,7 +7,7 @@
 {% if info %}<div class="flash">{{ info }}</div>{% endif %}
 {% if error %}<div class="flash" style="border-color:#e99;background:#fff5f5;">{{ error }}</div>{% endif %}
 
-<form method="post" style="max-width:640px;">
+<form method="post" style="max-width:700px;">
   {% csrf_token %}
 
   <label class="muted" for="name">Imię i nazwisko</label>
@@ -35,21 +35,43 @@
 
   <hr>
 
-  <label class="muted">Doświadczenie / umiejętności</label>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">
-    {% for sk in skills_catalog %}
-    <label style="display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:8px;padding:6px 10px;background:#fafafa;">
-      <input type="checkbox" name="skills" value="{{ sk }}" {% if sk in emp_skills_on %}checked{% endif %}>
-      <span>{{ sk|title }}</span>
-    </label>
-    {% endfor %}
-  </div>
+  {# --- UMIĘJĘTNOŚCI (zwijane) --- #}
+  {% with checked_count=emp_skills_on|length %}
+  <details style="border:1px solid var(--border);border-radius:10px;padding:10px;background:#fff;">
+    <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;">
+      <strong>Doświadczenie / umiejętności</strong>
+      <span class="muted">— zaznaczone: {{ checked_count }} / {{ skills_catalog|length }}</span>
+    </summary>
 
-  <div style="height:10px;"></div>
+    <div style="height:10px;"></div>
 
-  <label class="muted" for="new_skill">Dodaj nową umiejętność (globalnie)</label>
-  <input id="new_skill" name="new_skill" type="text" placeholder="np. Wózek widłowy">
-  <small class="muted">Po zapisaniu trafi do katalogu globalnego i zostanie zaznaczona u tego pracownika.</small>
+    <div class="skills-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;">
+      {% for sk in skills_catalog %}
+      <div class="skill-chip" style="display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:8px;padding:6px 10px;background:#fafafa;">
+        <label style="display:flex;align-items:center;gap:8px;flex:1 1 auto;">
+          <input type="checkbox" name="skills" value="{{ sk }}" {% if sk in emp_skills_on %}checked{% endif %}>
+          <span>{{ sk }}</span>
+        </label>
+        <button type="submit"
+                name="delete_skill"
+                value="{{ sk }}"
+                title="Usuń z katalogu globalnego"
+                style="border:1px solid #fecaca;background:#fff5f5;color:#b91c1c;border-radius:6px;padding:0 8px;line-height:26px;cursor:pointer;">
+          ×
+        </button>
+      </div>
+      {% empty %}
+      <div class="muted">Brak zdefiniowanych umiejętności.</div>
+      {% endfor %}
+    </div>
+
+    <div style="height:10px;"></div>
+
+    <label class="muted" for="new_skill">Dodaj nową umiejętność (globalnie)</label>
+    <input id="new_skill" name="new_skill" type="text" placeholder="np. Wózek widłowy">
+    <small class="muted">Po zapisaniu doda się do katalogu globalnego i zaznaczy u tego pracownika.</small>
+  </details>
+  {% endwith %}
 
   <div style="height:14px;"></div>
 

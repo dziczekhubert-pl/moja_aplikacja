@@ -4,15 +4,15 @@
     "position": "Lekarz",
     "contact": "dziczek.hubert@gmail.com",
     "email": "",
-    "medical_date": "",
-    "skills": []
+    "medical_exam": "",
+    "skills": {}
   },
   {
     "name": "Zosia",
     "position": "Pielęgniarka",
     "contact": "987654321",
     "email": "",
-    "medical_date": "",
-    "skills": []
+    "medical_exam": "",
+    "skills": {}
   }
 ]

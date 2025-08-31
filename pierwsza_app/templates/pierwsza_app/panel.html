@@ -90,6 +90,21 @@
       color: #6b7280;
       text-decoration: none;
     }
+
+    /* --- Kropka statusu po prawej stronie nazwiska --- */
+    .name-with-dot{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;          /* odstęp między nazwiskiem a kropką */
+      white-space:nowrap;
+    }
+    .status-dot{
+      display:inline-block;
+      width:8px;
+      height:8px;
+      border-radius:50%;
+      background:#ef4444;   /* czerwona */
+    }
   </style>
 </head>
 <body>
@@ -197,6 +212,25 @@
   </form>
 </div>
 
+<!-- KARTA: Eksport / Import profili -->
+<div class="card">
+  <h2>Eksport / Import profili</h2>
+  <div class="bar" style="align-items:center;">
+    <a class="btn" href="{% url 'export_profiles_csv' group %}">Eksport CSV</a>
+
+    <form method="post" action="{% url 'import_profiles_csv' group %}" enctype="multipart/form-data" style="display:flex; gap:8px; align-items:center;">
+      {% csrf_token %}
+      <input type="file" name="csv" accept=".csv" required>
+      <button class="btn">Import CSV</button>
+    </form>
+  </div>
+  <p class="muted" style="margin-top:6px;">
+    Oczekiwany format kolumn: <em>Imię i nazwisko; Stanowisko; Kontakt; E-mail; Termin badań (RRRR-MM-DD); Umiejętności</em><br>
+    Umiejętności rozdzielaj przecinkami lub średnikami.
+  </p>
+</div>
+
+
 <!-- KARTA: Pracownicy -->
 <div class="card">
   <h2>Pracownicy</h2>
@@ -215,9 +249,21 @@
     </thead>
     <tbody>
       {% for row in table_rows %}
-      <tr data-name="{{ row.name }}" data-email="{{ row.email|default:'' }}">
+      <tr>
         <td class="lp">{{ forloop.counter }}</td>
-        <td><a href="{% url 'employee_profile' group row.name %}">{{ row.name }}</a></td>
+
+        <!-- NAZWISKO + KROPKA PO PRAWEJ -->
+        <td>
+          <span class="name-with-dot">
+  <a href="{% url 'employee_profile' group row.name %}">{{ row.name }}</a>
+  {% if row.exam_soon %}
+    <span class="status-dot"
+          title="Do wygaśnięcia badań lekarskich pozostało {{ row.exam_days_left }} dni"></span>
+  {% endif %}
+</span>
+
+        </td>
+
         <td>{{ row.position }}</td>
         <td>{{ row.contact|default:"—" }}</td>
         <td class="num">{{ row.workdays }}</td>
@@ -234,7 +280,6 @@
             <input type="hidden" name="emp" value="{{ row.name }}">
             <button class="small" title="W dół">↓</button>
           </form>
-
           <button type="button" class="small" onclick="toggleForm('editForm{{ forloop.counter }}', true, 'input')">Edytuj</button>
           <form id="editForm{{ forloop.counter }}" class="hidden togglable" method="post">
             {% csrf_token %}
@@ -247,14 +292,12 @@
 
             <button class="small">Zapisz</button>
           </form>
-
           <form method="post" onsubmit="return confirm('Usunąć {{ row.name }}?');">
             {% csrf_token %}
             <input type="hidden" name="action" value="remove_employee">
             <input type="hidden" name="emp" value="{{ row.name }}">
             <button class="small danger">Usuń</button>
           </form>
-
           <button type="button" class="small" onclick="toggleForm('transferForm{{ forloop.counter }}', true, 'select')">Przenieś</button>
           <form id="transferForm{{ forloop.counter }}" class="hidden togglable" method="post">
             {% csrf_token %}
