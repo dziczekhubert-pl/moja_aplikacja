@@ -1,24 +1,60 @@
 [
   {
-    "name": "Hubert",
-    "position": "Lekarz",
+    "id": "7",
+    "name": "Hanna Dziczek",
+    "position": "Oddziałowa",
     "contact": "787278588",
-    "email": "dziczek.hubert@gmail.com",
-    "medical_exam": "2025-09-29",
+    "email": "123@o2.pl",
+    "medical_exam": "2025-09-30",
     "skills": {
       "Praca na SOR": false,
-      "Oddział Kardiologii rehabilitacyjnej": true
+      "Oddział Kardiologii rehabilitacyjnej": false,
+      "Zarządzanie": true
     }
   },
   {
-    "name": "Milena",
-    "position": "Pielęgniarka",
-    "contact": "787278585",
-    "email": "hubert501@o2.pl",
-    "medical_exam": "2025-10-12",
+    "id": "8",
+    "name": "Tymoteusz Dziczek",
+    "position": "Lekarz",
+    "contact": "787123588",
+    "email": "DrTymon@o2.pl",
+    "medical_exam": "2026-02-18",
     "skills": {
       "Praca na SOR": true,
-      "Oddział Kardiologii rehabilitacyjnej": true
+      "Oddział Kardiologii rehabilitacyjnej": true,
+      "Zarządzanie": false,
+      "Sprzątnie": false,
+      "Wszczepienia": true
+    }
+  },
+  {
+    "id": "5",
+    "name": "Hubert Dziczek",
+    "position": "Salowy",
+    "contact": "787278456",
+    "email": "salowy@o2.pl",
+    "medical_exam": "2025-11-28",
+    "skills": {
+      "Praca na SOR": false,
+      "Oddział Kardiologii rehabilitacyjnej": false,
+      "Zarządzanie": false,
+      "Sprzątnie": true
+    }
+  },
+  {
+    "id": "12",
+    "name": "Honorata Dziczek",
+    "position": "Pielęgniarka",
+    "contact": "787321456",
+    "email": "mama@o2.pl",
+    "medical_exam": "2025-04-20",
+    "skills": {
+      "Praca na SOR": true,
+      "Oddział Kardiologii rehabilitacyjnej": false,
+      "Zarządzanie": false,
+      "Sprzątnie": false,
+      "Wszczepienia": false,
+      "Pobieranie Krwi": true
     }
   }
 ]

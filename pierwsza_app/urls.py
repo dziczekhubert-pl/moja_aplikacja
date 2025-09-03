@@ -1,46 +1,34 @@
-from django.urls import path, include
-from .views import (
-    start,
-    login_view,
-    panel,
-    delete_group,
-    ping,
-    tabela,
-    edit_table,
-    autosave_cell,
-    logout_view,
-    grafik_view,
-    notify_email,
-    employee_profile,
-    export_profiles_csv,   # <- NOWE
-    import_profiles_csv,   # <- NOWE
-)
+from django.urls import path
+from . import views  # <<< KLUCZOWE: import modułu views
 
 urlpatterns = [
-    # start / logowanie / wylogowanie
-    path("", start, name="start"),
-    path("login/<str:group>/", login_view, name="login"),
-    path("logout/<str:group>/", logout_view, name="logout"),
+    path("", views.start, name="start"),
 
-    # panel + CSV
-    path("panel/<str:group>/", panel, name="panel"),
-    path("panel/<str:group>/export-csv/", export_profiles_csv, name="export_profiles_csv"),
-    path("panel/<str:group>/import-csv/", import_profiles_csv, name="import_profiles_csv"),
+    # logowanie / wylogowanie
+    path("login/<str:group>/", views.login_view, name="login"),
+    path("logout/<str:group>/", views.logout_view, name="logout"),
 
-    # profil pracownika
-    path("profil/<str:group>/<path:emp_name>/", employee_profile, name="employee_profile"),
+    # panel
+    path("panel/<str:group>/", views.panel, name="panel"),
 
-    # grafik + powiadomienia e-mail
-    path("grafik/<str:group>/", grafik_view, name="grafik"),
-    path("grafik/<str:group>/notify-email/", notify_email, name="notify_email"),
+    # eksport / import PROFILI
+    path("panel/<str:group>/export-csv/", views.export_profiles_csv, name="export_profiles_csv"),
+    path("panel/<str:group>/import-csv/", views.import_profiles_csv, name="import_profiles_csv"),
+    path("export-profiles-stats/<str:group>/", views.export_profiles_with_stats_csv,
+         name="export_profiles_with_stats_csv"),
 
-    # edycja tabeli + autosave
-    path("edycja/<str:group>/", edit_table, name="edit_table"),
-    path("edycja/<str:group>/autosave/", autosave_cell, name="autosave_cell"),
+    # eksport / import SIATKI MIESIĄCA (tokeny 1/2/3/C)
+    path("export-month/<str:group>/", views.export_month_tokens_csv, name="export_month_tokens_csv"),
+    path("import-month/<str:group>/", views.import_month_tokens_csv, name="import_month_tokens_csv"),
 
-    # inne
-    path("tabela/<str:group>/", tabela, name="tabela"),
-    path("delete/<str:group>/", delete_group, name="delete_group"),
-    path("api/", include("schedule.urls")),
-    path("ping/", ping, name="ping"),
+    # grafik (widok dzienny) i edycja siatki
+    path("grafik/<str:group>/", views.grafik_view, name="grafik"),
+    path("edycja/<str:group>/", views.edit_table, name="edit"),
+
+    # inne pomocnicze
+    path("tabela/<str:group>/", views.tabela, name="tabela"),
+    path("set-schedule/<str:group>/", views.set_schedule, name="set_schedule"),
+    path("employee/<str:group>/<path:emp_name>/", views.employee_profile, name="employee_profile"),
+    path("delete-group/<str:group>/", views.delete_group, name="delete_group"),
+    path("ping/", views.ping, name="ping"),
 ]

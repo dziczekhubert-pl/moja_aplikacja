@@ -95,7 +95,7 @@
     .name-with-dot{
       display:inline-flex;
       align-items:center;
-      gap:6px;          /* odstęp między nazwiskiem a kropką */
+      gap:6px;
       white-space:nowrap;
     }
     .status-dot{
@@ -103,7 +103,7 @@
       width:8px;
       height:8px;
       border-radius:50%;
-      background:#ef4444;   /* czerwona */
+      background:#ef4444;
     }
   </style>
 </head>
@@ -121,8 +121,9 @@
 <!-- KARTA: Szybkie akcje -->
 <div class="card">
   <h2>Szybkie akcje</h2>
+
+  <!-- GÓRNY rząd: wybór miesiąca/roku + przyciski -->
   <div class="bar" style="margin-top:4px;">
-    <!-- Jeden formularz: Przejdź do edycji + Ustaw grafik -->
     <form method="post">
       {% csrf_token %}
       <label>
@@ -140,18 +141,10 @@
         </select>
       </label>
 
-      <!-- przycisk do edycji -->
       <button type="submit" name="action" value="go_to_edit">Przejdź do edycji</button>
-
-      <!-- przycisk do ustawienia grafiku -->
-      <button
-        type="submit"
-        formmethod="get"
-        formaction="{% url 'grafik' group %}"
-      >Ustaw grafik</button>
+      <button type="submit" formmethod="get" formaction="{% url 'grafik' group %}">Ustaw grafik</button>
     </form>
 
-    <!-- Zmień logowanie -->
     <button type="button" onclick="toggleForm('credForm', true, 'input')">Zmień logowanie</button>
     <form id="credForm" class="hidden togglable" method="post">
       {% csrf_token %}
@@ -161,20 +154,34 @@
       <button>Zapisz</button>
     </form>
 
-    <!-- Wyloguj -->
     <form method="post" action="{% url 'logout' group %}">
       {% csrf_token %}
       <button type="submit">Wyloguj</button>
     </form>
   </div>
 
-  <!-- Dodaj pracownika -->
-  <form method="post" class="bar" style="margin-top:10px;">
-    {% csrf_token %}
-    <input type="hidden" name="action" value="add_employee">
-    <input type="text" name="new_emp" placeholder="Nazwisko i imię" required>
-    <button>Dodaj</button>
-  </form>
+  <!-- DOLNY rząd: wszystko od LEWEJ (dodaj + eksport + import) -->
+  <div class="bar" style="margin-top:10px; justify-content:flex-start;">
+
+    <!-- Dodaj pracownika -->
+    <form method="post" style="display:flex; gap:8px; align-items:center;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add_employee">
+      <input type="text" name="new_emp" placeholder="Nazwisko i imię" required>
+      <button>Dodaj</button>
+    </form>
+
+    <!-- Eksport CSV -->
+    <a class="btn" href="{% url 'export_profiles_csv' group %}">Eksport CSV</a>
+
+    <!-- Import CSV (ukryte pole pliku + widoczny przycisk) -->
+    <form id="importCsvForm" method="post" action="{% url 'import_profiles_csv' group %}" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input id="csvFileInput" type="file" name="csv" accept=".csv" class="hidden">
+      <button type="button" class="btn" onclick="triggerCsvPicker()">Import CSV</button>
+    </form>
+
+  </div>
 </div>
 
 <!-- KARTA: Filtr i zakres -->
@@ -212,25 +219,6 @@
   </form>
 </div>
 
-<!-- KARTA: Eksport / Import profili -->
-<div class="card">
-  <h2>Eksport / Import profili</h2>
-  <div class="bar" style="align-items:center;">
-    <a class="btn" href="{% url 'export_profiles_csv' group %}">Eksport CSV</a>
-
-    <form method="post" action="{% url 'import_profiles_csv' group %}" enctype="multipart/form-data" style="display:flex; gap:8px; align-items:center;">
-      {% csrf_token %}
-      <input type="file" name="csv" accept=".csv" required>
-      <button class="btn">Import CSV</button>
-    </form>
-  </div>
-  <p class="muted" style="margin-top:6px;">
-    Oczekiwany format kolumn: <em>Imię i nazwisko; Stanowisko; Kontakt; E-mail; Termin badań (RRRR-MM-DD); Umiejętności</em><br>
-    Umiejętności rozdzielaj przecinkami lub średnikami.
-  </p>
-</div>
-
-
 <!-- KARTA: Pracownicy -->
 <div class="card">
   <h2>Pracownicy</h2>
@@ -251,19 +239,14 @@
       {% for row in table_rows %}
       <tr>
         <td class="lp">{{ forloop.counter }}</td>
-
-        <!-- NAZWISKO + KROPKA PO PRAWEJ -->
         <td>
           <span class="name-with-dot">
-  <a href="{% url 'employee_profile' group row.name %}">{{ row.name }}</a>
-  {% if row.exam_soon %}
-    <span class="status-dot"
-          title="Do wygaśnięcia badań lekarskich pozostało {{ row.exam_days_left }} dni"></span>
-  {% endif %}
-</span>
-
+            <a href="{% url 'employee_profile' group row.name %}">{{ row.name }}</a>
+            {% if row.exam_soon %}
+              <span class="status-dot" title="Do wygaśnięcia badań lekarskich pozostało {{ row.exam_days_left }} dni"></span>
+            {% endif %}
+          </span>
         </td>
-
         <td>{{ row.position }}</td>
         <td>{{ row.contact|default:"—" }}</td>
         <td class="num">{{ row.workdays }}</td>
@@ -285,11 +268,9 @@
             {% csrf_token %}
             <input type="hidden" name="action" value="edit_employee">
             <input type="hidden" name="old_emp" value="{{ row.name }}">
-
             <input type="text" name="new_emp" value="{{ row.name }}" placeholder="Nazwisko i imię" style="width:180px;">
             <input type="text" name="new_pos" value="{{ row.position }}" placeholder="Stanowisko" style="width:160px;">
             <input type="text" name="new_contact" value="{{ row.contact }}" placeholder="Kontakt" style="width:160px;">
-
             <button class="small">Zapisz</button>
           </form>
           <form method="post" onsubmit="return confirm('Usunąć {{ row.name }}?');">
@@ -342,13 +323,27 @@ function toggleForm(id, closeOthers, focusKind) {
     }
   }
 }
+
+/* Import CSV – ukryty input + auto-submit po wyborze */
+function triggerCsvPicker() {
+  var inp = document.getElementById('csvFileInput');
+  if (!inp) return;
+  inp.click();
+}
+document.addEventListener('DOMContentLoaded', function() {
+  var inp = document.getElementById('csvFileInput');
+  if (inp) {
+    inp.addEventListener('change', function() {
+      if (inp.files && inp.files.length > 0) {
+        document.getElementById('importCsvForm').submit();
+      }
+    });
+  }
+});
 </script>
 
 <footer class="footer">
-  Hubert Dziczek –
-  <a href="mailto:optymalizacje.procesow@gmail.com">
-    optymalizacje.procesow@gmail.com
-  </a>
+  Hubert Dziczek – <a href="mailto:optymalizacje.procesow@gmail.com">optymalizacje.procesow@gmail.com</a>
 </footer>
 
 </body>

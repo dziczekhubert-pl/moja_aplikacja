@@ -1,0 +1,15 @@
+[
+  {
+    "id": "6",
+    "name": "Milena Dziczek",
+    "position": "Pielęgniarka",
+    "contact": "787278123",
+    "email": "321@o2.pl",
+    "medical_exam": "2025-11-22",
+    "skills": {
+      "Praca na SOR": true,
+      "Oddział Kardiologii rehabilitacyjnej": true,
+      "Zarządzanie": false
+    }
+  }
+]

@@ -1,3 +1,4 @@
+from .core.pdf_grafik import generate_pdf_response as generate_grafik_pdf_response
 from django.shortcuts import render, redirect
 from django.http import HttpResponse, FileResponse, HttpResponseRedirect, JsonResponse, Http404
 from django.conf import settings
@@ -10,7 +11,8 @@ from pathlib import Path
 from datetime import date, timedelta
 from collections import defaultdict
 from urllib.parse import unquote
-import csv, io
+import csv
+import io
 import json
 import re
 
@@ -27,9 +29,67 @@ from .utils import (
 BASE_DIR = Path(settings.BASE_DIR)
 SKILLS_FILE = BASE_DIR / "skills_catalog.json"
 
+# =========================
+# STAŁE ID PRACOWNIKA + HISTORIA
+# =========================
+EMP_INDEX = BASE_DIR / "EMP_INDEX.json"
+HISTORY_DIR = BASE_DIR / "history"
+HISTORY_DIR.mkdir(exist_ok=True)
+
+
+def _load_emp_index():
+    try:
+        if EMP_INDEX.exists():
+            return json.loads(EMP_INDEX.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {"next": 1}
+
+
+def next_employee_id() -> str:
+    idx = _load_emp_index()
+    n = int(idx.get("next", 1))
+    idx["next"] = n + 1
+    EMP_INDEX.write_text(json.dumps(
+        idx, ensure_ascii=False, indent=2), encoding="utf-8")
+    return str(n)
+
+
+def history_path_for(emp_id: str) -> Path:
+    return HISTORY_DIR / f"emp_{emp_id}.json"
+
+
+def append_history(emp_id: str, day_iso: str, group: str, token: str):
+    """
+    Zapis 'ostatni stan' dla danego dnia.
+    token może być: '1','2','3','C' LUB '' (puste = wyczyszczono).
+    """
+    if not emp_id or not day_iso:
+        return
+    path = history_path_for(emp_id)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")
+                          ) if path.exists() else []
+    except Exception:
+        data = []
+
+    # usuń poprzednie wpisy z tą samą datą
+    day_iso = (day_iso or "").strip()
+    token = (token or "").strip().upper()
+    data = [rec for rec in data if (rec.get("date") or "").strip() != day_iso]
+
+    # dopisz aktualny stan (może być pusty)
+    entry = {"date": day_iso, "group": group, "token": token}
+    data.append(entry)
+
+    path.write_text(json.dumps(data, ensure_ascii=False,
+                    indent=2), encoding="utf-8")
+
 # -------------------------
 # KATALOG UMIEJĘTNOŚCI (GLOBALNY)
 # -------------------------
+
+
 def load_skill_catalog():
     try:
         if SKILLS_FILE.exists():
@@ -47,6 +107,7 @@ def load_skill_catalog():
         pass
     return []
 
+
 def save_skill_catalog(catalog):
     uniq, seen = [], set()
     for x in catalog or []:
@@ -55,7 +116,9 @@ def save_skill_catalog(catalog):
         if s and k not in seen:
             seen.add(k)
             uniq.append(s)
-    SKILLS_FILE.write_text(json.dumps(uniq, ensure_ascii=False, indent=2), encoding="utf-8")
+    SKILLS_FILE.write_text(json.dumps(
+        uniq, ensure_ascii=False, indent=2), encoding="utf-8")
+
 
 def delete_skill_globally(skill_name: str) -> bool:
     """
@@ -82,7 +145,8 @@ def delete_skill_globally(skill_name: str) -> bool:
         changed_dept = False
         for u in users:
             skills_map = u.get("skills") or {}
-            new_map = {k: v for k, v in skills_map.items() if k.casefold() != key}
+            new_map = {k: v for k, v in skills_map.items()
+                       if k.casefold() != key}
             if new_map != skills_map:
                 u["skills"] = new_map
                 changed_dept = True
@@ -92,10 +156,10 @@ def delete_skill_globally(skill_name: str) -> bool:
 
     return changed_catalog or changed_any_user
 
+
 # -------------------------
 # PDF
 # -------------------------
-from .core.pdf_grafik import generate_pdf_response as generate_grafik_pdf_response
 
 try:
     from .core.pdf_karty import generate_karty_pdf_response
@@ -106,6 +170,7 @@ except Exception:
 # E-MAIL
 # -------------------------
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
 
 @require_POST
 @never_cache
@@ -131,10 +196,12 @@ def notify_email(request, group):
         return JsonResponse({"ok": False, "detail": f"Nieprawidłowy JSON: {e}"}, status=400)
 
     subject = (data.get("subject") or f"Grafik {group}").strip()
-    message = (data.get("message") or f"Został zaktualizowany grafik dla działu {group}.").strip()
+    message = (data.get("message")
+               or f"Został zaktualizowany grafik dla działu {group}.").strip()
 
     users = load_users_norm(group)
-    only_names = set(data.get("employees") or []) if isinstance(data.get("employees"), list) else None
+    only_names = set(data.get("employees") or []) if isinstance(
+        data.get("employees"), list) else None
 
     recipients, missing = [], []
     for u in users:
@@ -148,7 +215,8 @@ def notify_email(request, group):
                 missing.append(u.get("name") or "")
 
     extras = data.get("extra") if isinstance(data.get("extra"), list) else []
-    extras = [e.strip() for e in extras if isinstance(e, str) and EMAIL_RE.match(e.strip())]
+    extras = [e.strip() for e in extras if isinstance(
+        e, str) and EMAIL_RE.match(e.strip())]
 
     recipients = sorted(set(recipients + extras))
     if not recipients:
@@ -157,7 +225,8 @@ def notify_email(request, group):
             detail += f" Brak e-maili dla: {', '.join(missing)}."
         return JsonResponse({"ok": False, "detail": detail}, status=400)
 
-    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com")
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL",
+                         "no-reply@example.com")
     try:
         sent = send_mail(subject=subject, message=message, from_email=from_email,
                          recipient_list=recipients, fail_silently=False)
@@ -170,10 +239,13 @@ def notify_email(request, group):
 # -------------------------
 # USERS – normalizacja / migracja
 # -------------------------
+
+
 def normalize_users(users_list):
     """
     Docelowy format:
     {
+      "id": str,             # stałe ID pracownika
       "name": str,
       "position": str,
       "contact": str,        # telefon
@@ -186,6 +258,7 @@ def normalize_users(users_list):
     for u in users_list or []:
         if isinstance(u, str):
             norm.append({
+                "id": next_employee_id(),
                 "name": u, "position": "", "contact": "",
                 "email": "", "medical_exam": "", "skills": {},
             })
@@ -200,7 +273,10 @@ def normalize_users(users_list):
                 for k in raw_sk:
                     skills[str(k)] = True
 
+            emp_id = (u.get("id") or "").strip() or next_employee_id()
+
             norm.append({
+                "id": emp_id,
                 "name": (u.get("name") or "").strip(),
                 "position": (u.get("position") or "").strip(),
                 "contact": (u.get("contact") or "").strip(),
@@ -209,6 +285,7 @@ def normalize_users(users_list):
                 "skills": skills,
             })
     return norm
+
 
 def load_users_norm(group):
     raw = load_users_from_file(group)
@@ -220,8 +297,9 @@ def load_users_norm(group):
     else:
         for x in (raw or []):
             if isinstance(x, dict):
-                required = ("contact", "position", "email", "medical_exam", "skills")
-                if any(k not in x for k in required):
+                required = ("id", "contact", "position",
+                            "email", "medical_exam", "skills")
+                if any(k not in x for k in required) or not (x.get("id") or "").strip():
                     needs_migration = True
                     break
 
@@ -232,6 +310,8 @@ def load_users_norm(group):
 # -------------------------
 # START
 # -------------------------
+
+
 @never_cache
 def start(request):
     groups = load_groups()
@@ -260,6 +340,8 @@ def start(request):
 # -------------------------
 # LOGOWANIE
 # -------------------------
+
+
 @never_cache
 def login_view(request, group):
     groups = load_groups()
@@ -282,6 +364,8 @@ def login_view(request, group):
 # -------------------------
 # POMOCNICZE – zakres miesięcy
 # -------------------------
+
+
 def months_between(from_month, from_year, to_month, to_year):
     fm, fy = POLISH_MONTHS[from_month], int(from_year)
     tm, ty = POLISH_MONTHS[to_month], int(to_year)
@@ -299,6 +383,8 @@ def months_between(from_month, from_year, to_month, to_year):
 # -------------------------
 # Święta / niedziele
 # -------------------------
+
+
 def _easter_date(y: int) -> date:
     a = y % 19
     b = y // 100
@@ -316,8 +402,10 @@ def _easter_date(y: int) -> date:
     day = ((h + l - 7 * m_ + 114) % 31) + 1
     return date(y, month, day)
 
+
 def _is_polish_holiday(y: int, m: int, d: int) -> bool:
-    fixed = {(1, 1), (1, 6), (5, 1), (5, 3), (8, 15), (11, 1), (11, 11), (12, 25), (12, 26)}
+    fixed = {(1, 1), (1, 6), (5, 1), (5, 3), (8, 15),
+             (11, 1), (11, 11), (12, 25), (12, 26)}
     if (m, d) in fixed:
         return True
     easter = _easter_date(y)
@@ -325,12 +413,14 @@ def _is_polish_holiday(y: int, m: int, d: int) -> bool:
     corpus_christi = easter + timedelta(days=60)
     return (m, d) in {(easter_mon.month, easter_mon.day), (corpus_christi.month, corpus_christi.day)}
 
+
 def _is_sunday_or_holiday(y: int, m: int, d: int) -> bool:
     try:
         wd = date(y, m, d).weekday()
     except ValueError:
         return False
     return wd == 6 or _is_polish_holiday(y, m, d)
+
 
 def count_stats(group, employees, month_year_list):
     WORK_TOKENS = {"1", "2", "3"}
@@ -357,6 +447,7 @@ def count_stats(group, employees, month_year_list):
                             stats[e["name"]]["workdays"] += 1
     return stats
 
+
 def update_group_credentials(group, login, password):
     groups = load_groups()
     for g in groups:
@@ -364,6 +455,7 @@ def update_group_credentials(group, login, password):
             g["login"] = login
             g["password"] = password
     save_groups(groups)
+
 
 def rename_group_and_files(old, new):
     groups = load_groups()
@@ -381,8 +473,67 @@ def rename_group_and_files(old, new):
         f.rename(BASE_DIR / f.name.replace(f"{old}_", f"{new}_"))
 
 # -------------------------
+# STATYSTYKI Z HISTORII (po ID)
+# -------------------------
+
+
+def count_stats_from_history(employees, date_from, date_to):
+    stats_by_id = {e["id"]: {"ndz": 0, "l4": 0, "workdays": 0}
+                   for e in employees}
+    VALID = {"1", "2", "3", "C", ""}  # dopuszczamy też pusty stan
+
+    for e in employees:
+        emp_id = e.get("id")
+        if not emp_id:
+            continue
+        path = history_path_for(emp_id)
+        if not path.exists():
+            continue
+        try:
+            entries = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            entries = []
+
+        # poskładaj: ostatni wpis per data
+        last_by_date = {}
+        for rec in entries:
+            ds = (rec.get("date") or "").strip()
+            tok = (rec.get("token") or "").strip().upper()
+            if ds and tok in VALID:
+                last_by_date[ds] = tok  # nadpisze poprzednie
+
+        for ds, tok in last_by_date.items():
+            try:
+                y, m, d = map(int, ds.split("-"))
+                dt = date(y, m, d)
+            except Exception:
+                continue
+            if not (date_from <= dt <= date_to):
+                continue
+
+            if tok == "C":
+                stats_by_id[emp_id]["l4"] += 1
+            elif tok in {"1", "2", "3"}:
+                if _is_sunday_or_holiday(y, m, d):
+                    stats_by_id[emp_id]["ndz"] += 1
+                else:
+                    if dt.weekday() in (0, 1, 2, 3, 4, 5):  # pn–sob
+                        stats_by_id[emp_id]["workdays"] += 1
+            else:
+                # pusty stan -> nic nie doliczamy
+                pass
+
+    by_name = {}
+    for e in employees:
+        by_name[e["name"]] = stats_by_id.get(
+            e["id"], {"ndz": 0, "l4": 0, "workdays": 0})
+    return by_name
+
+# -------------------------
 # PANEL
 # -------------------------
+
+
 @never_cache
 def panel(request, group):
     if request.session.get("auth_group") != group:
@@ -399,10 +550,12 @@ def panel(request, group):
     to_month = request.GET.get("to_month", "Grudzień")
     to_year = request.GET.get("to_year", "2025")
 
-    visible_users = [u for u in users if q.lower() in u["name"].lower()] if q else users
+    visible_users = [u for u in users if q.lower(
+    ) in u["name"].lower()] if q else users
 
     # Pomocnicze: liczba dni do wygaśnięcia badań
     today = date.today()
+
     def _days_left_to_exam(u):
         s = (u.get("medical_exam") or "").strip()
         try:
@@ -419,6 +572,7 @@ def panel(request, group):
             if new_emp:
                 if not any(u["name"] == new_emp for u in users):
                     users.append({
+                        "id": next_employee_id(),
                         "name": new_emp, "position": "", "contact": "",
                         "email": "", "medical_exam": "", "skills": {},
                     })
@@ -437,14 +591,16 @@ def panel(request, group):
 
         elif action == "move_up":
             emp = request.POST.get("emp", "")
-            idx = next((i for i, u in enumerate(users) if u["name"] == emp), None)
+            idx = next((i for i, u in enumerate(
+                users) if u["name"] == emp), None)
             if idx is not None and idx > 0:
                 users[idx - 1], users[idx] = users[idx], users[idx - 1]
                 save_users_to_file(group, users)
 
         elif action == "move_down":
             emp = request.POST.get("emp", "")
-            idx = next((i for i, u in enumerate(users) if u["name"] == emp), None)
+            idx = next((i for i, u in enumerate(
+                users) if u["name"] == emp), None)
             if idx is not None and idx < len(users) - 1:
                 users[idx + 1], users[idx] = users[idx], users[idx + 1]
                 save_users_to_file(group, users)
@@ -519,8 +675,26 @@ def panel(request, group):
     # Tabela
     table_rows = []
     if request.GET.get("action") == "show_stats":
+        # wyznacz zakres dat
         month_years = months_between(from_month, from_year, to_month, to_year)
-        stats = count_stats(group, visible_users, month_years)
+        start_y = int(month_years[0][1])
+        start_m = POLISH_MONTHS[month_years[0][0]]
+        end_y = int(month_years[-1][1])
+        end_m = POLISH_MONTHS[month_years[-1][0]]
+        import calendar as _cal
+        date_from = date(start_y, start_m, 1)
+        date_to = date(end_y, end_m, _cal.monthrange(end_y, end_m)[1])
+
+        # spróbuj policzyć z historii
+        hist_stats = count_stats_from_history(
+            visible_users, date_from, date_to)
+
+        # fallback: jeśli dla wszystkich 0 i brak plików historii, użyj starego liczenia z plików miesięcznych
+        if not any((v["ndz"] or v["l4"] or v["workdays"]) for v in hist_stats.values()):
+            stats = count_stats(group, visible_users, month_years)
+        else:
+            stats = hist_stats
+
         for u in visible_users:
             days_left = _days_left_to_exam(u)
             exam_soon = (days_left is not None) and (0 <= days_left <= 30)
@@ -575,6 +749,8 @@ def panel(request, group):
 # -------------------------
 # EKSPORT / IMPORT PROFILI (CSV)
 # -------------------------
+
+
 @never_cache
 def export_profiles_csv(request, group):
     """Eksport profili pracowników danego działu do CSV (separator ';', UTF-8 BOM – działa w Excelu)."""
@@ -586,7 +762,8 @@ def export_profiles_csv(request, group):
     sio = io.StringIO()
     writer = csv.writer(sio, delimiter=';')
 
-    headers = ["Imię i nazwisko", "Stanowisko", "Kontakt (tel.)", "E-mail", "Termin badań (RRRR-MM-DD)", "Umiejętności"]
+    headers = ["Imię i nazwisko", "Stanowisko",
+               "Kontakt (tel.)", "E-mail", "Termin badań (RRRR-MM-DD)", "Umiejętności"]
     writer.writerow(headers)
 
     for u in users:
@@ -607,7 +784,9 @@ def export_profiles_csv(request, group):
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
 
+
 @require_POST
+@never_cache
 @never_cache
 def import_profiles_csv(request, group):
     """
@@ -615,11 +794,11 @@ def import_profiles_csv(request, group):
     Kolumny rozpoznawane (synonimy):
       - name: "Imię i nazwisko", "Nazwisko i imię", "name", "pracownik"
       - position: "Stanowisko", "position"
-      - contact: "Kontakt", "Telefon", "Tel", "contact", "phone"
+      - contact: "Kontakt", "Telefon", "Tel", "Kontakt (tel.)", "contact", "phone"
       - email: "E-mail", "Email", "mail"
       - medical_exam: "Termin badań", "Termin badan", "badania", "medical_exam", "exam", "data badań"
       - skills: "Umiejętności", "Umiejetnosci", "Doświadczenia", "skills"
-    Umiejętności z CSV są nadpisywane dla danego pracownika (to najprostszy i czytelny model).
+    Umiejętności z CSV są nadpisywane dla danego pracownika (najprostszy model).
     Nowe umiejętności trafiają też do katalogu globalnego.
     """
     if request.session.get("auth_group") != group:
@@ -629,27 +808,34 @@ def import_profiles_csv(request, group):
     if not uploaded:
         return redirect(f"/panel/{group}/?info=Nie%20wybrano%20pliku%20CSV.")
 
-    data = uploaded.read()
+    # -- wczytaj raz --
+    raw = uploaded.read()
     try:
-        text = data.decode("utf-8-sig")
+        text = raw.decode("utf-8-sig")
     except Exception:
         try:
-            text = data.decode("cp1250")
+            text = raw.decode("cp1250")
         except Exception:
             return redirect(f"/panel/{group}/?info=Nie%20uda%C5%82o%20si%C4%99%20odczyta%C4%87%20pliku%20(kodowanie).")
 
-    # Wykryj separator
+    # -- wykryj separator --
     try:
-        dialect = csv.Sniffer().sniff(text.splitlines()[0])
-        delim = dialect.delimiter if dialect.delimiter in (',', ';') else ';'
+        first_line = text.splitlines()[0] if text.splitlines() else ""
+        dialect = csv.Sniffer().sniff(first_line or "a;b")
+        delim = dialect.delimiter if dialect.delimiter in (",", ";") else ";"
     except Exception:
-        delim = ';'
+        delim = ";"
 
-    # Normalizacja nagłówków -> klucze
+    # --- Normalizacja nagłówków -> klucze ---
     def _key(name: str) -> str:
         s = (name or "").strip().lower()
+        # zdejmij polskie znaki
         trans = str.maketrans("ąćęłńóśżź", "acelnoszz")
         s = s.translate(trans)
+        # wywal to co w nawiasach (np. "(tel.)")
+        s = re.sub(r"\(.*?\)", "", s)
+        # interpunkcja na spacje (zostaw litery/cyfry/spacje/_)
+        s = re.sub(r"[^\w\s]", " ", s)
         s = s.replace("-", " ")
         s = " ".join(s.split())
         return s
@@ -660,26 +846,32 @@ def import_profiles_csv(request, group):
             return "name"
         if k in ("stanowisko", "position", "pos"):
             return "position"
-        if k in ("kontakt", "telefon", "tel", "contact", "phone"):
+        if k in ("kontakt", "telefon", "tel", "contact", "phone", "kontakt tel", "telefon kontakt"):
             return "contact"
         if k in ("e mail", "email", "mail"):
             return "email"
-        if k in ("termin badan", "termin badan lekarskich", "badania", "medical exam", "exam", "data badan", "termin badan rrrr mm dd"):
+        if k in ("termin badan", "termin badan lekarskich", "badania",
+                 "medical exam", "exam", "data badan", "termin badan rrrr mm dd"):
             return "medical_exam"
         if k in ("umiejetnosci", "umiejetnosc", "doswiadczenia", "skills"):
             return "skills"
         return k
 
     reader = csv.DictReader(io.StringIO(text), delimiter=delim)
-    field_map = {f: _map_header(f) for f in (reader.fieldnames or [])}
+    if not reader.fieldnames:
+        return redirect(f"/panel/{group}/?info=Pusty%20lub%20beznag%C5%82%C3%B3wkowy%20CSV.")
+
+    field_map = {f: _map_header(f) for f in reader.fieldnames}
 
     users = load_users_norm(group)
     users_by_name = {u["name"]: u for u in users}
+
     catalog = load_skill_catalog()
     catalog_ci = {s.casefold(): s for s in catalog}
 
     imported = 0
     for row in reader:
+        # zmapowane klucze -> wartości
         r = {field_map.get(k, k): (v or "").strip() for k, v in row.items()}
 
         name = r.get("name") or ""
@@ -688,15 +880,22 @@ def import_profiles_csv(request, group):
 
         u = users_by_name.get(name)
         if not u:
-            u = {"name": name, "position": "", "contact": "", "email": "", "medical_exam": "", "skills": {}}
+            u = {
+                "id": next_employee_id(),
+                "name": name, "position": "", "contact": "", "email": "", "medical_exam": "", "skills": {}
+            }
             users.append(u)
             users_by_name[name] = u
 
-        if "position" in r:      u["position"] = r["position"]
-        if "contact" in r:       u["contact"] = r["contact"]
-        if "email" in r:         u["email"] = r["email"]
+        # podstawowe pola
+        if "position" in r:
+            u["position"] = r["position"]
+        if "contact" in r:
+            u["contact"] = r["contact"]   # << numer tel. trafia tutaj
+        if "email" in r:
+            u["email"] = r["email"]
 
-        # Data – akceptuj RRRR-MM-DD lub DD.MM.RRRR (także /)
+        # data badań – akceptuj RRRR-MM-DD albo DD.MM.RRRR (także '/')
         med = r.get("medical_exam", "")
         if med:
             mm = med.replace("/", ".").replace("-", ".")
@@ -716,18 +915,16 @@ def import_profiles_csv(request, group):
                 parsed = ""
             u["medical_exam"] = parsed
 
-        # Umiejętności – nadpisujemy listę
+        # umiejętności – nadpisujemy listę w profilu + aktualizujemy katalog globalny
         skills_str = r.get("skills", "")
         if skills_str:
             toks = [t.strip() for t in re.split(r"[;,]", skills_str) if t.strip()]
-            # aktualizuj katalog globalny
             toks_ci = {x.casefold() for x in toks}
             for t in toks:
                 key = t.casefold()
                 if key not in catalog_ci:
                     catalog.append(t)
                     catalog_ci[key] = t
-            # ustaw w profilu: True dla podanych, False dla reszty z katalogu
             u["skills"] = {s: (s.casefold() in toks_ci) for s in catalog}
 
         imported += 1
@@ -740,6 +937,8 @@ def import_profiles_csv(request, group):
 # -------------------------
 # GRAFIK (widok dzienny)
 # -------------------------
+
+
 @never_cache
 def grafik_view(request, group):
     """
@@ -749,11 +948,13 @@ def grafik_view(request, group):
         return redirect("login", group=group)
 
     from datetime import date as _date
-    date_str = (request.GET.get("date") or request.POST.get("date") or _date.today().isoformat()).strip()
+    date_str = (request.GET.get("date") or request.POST.get(
+        "date") or _date.today().isoformat()).strip()
 
     groups = load_groups()
     all_employees_map = defaultdict(list)   # dept -> [names]
-    employees_meta = {}                     # name -> {contact(email prefer), email, phone, position, department}
+    # name -> {contact(email prefer), email, phone, position, department}
+    employees_meta = {}
 
     for g in groups:
         dept = g["name"]
@@ -779,7 +980,8 @@ def grafik_view(request, group):
         employee_list.append({
             "name": u["name"],
             "position": (u.get("position") or "").strip(),
-            "contact": (u.get("email") or u.get("contact") or "").strip(),  # prefer e-mail
+            # prefer e-mail
+            "contact": (u.get("email") or u.get("contact") or "").strip(),
         })
     employee_names = [u["name"] for u in current_users]
 
@@ -802,7 +1004,8 @@ def grafik_view(request, group):
     if request.method == "POST":
         emps = request.POST.getlist("emp[]")
         poss = request.POST.getlist("pos[]")
-        conts = request.POST.getlist("contact[]")  # w formularzu pole nazywa się 'contact'
+        # w formularzu pole nazywa się 'contact'
+        conts = request.POST.getlist("contact[]")
 
         rows = []
         for i in range(max(len(emps), len(poss), len(conts))):
@@ -814,11 +1017,13 @@ def grafik_view(request, group):
 
             email_pref = (employees_meta.get(name, {}) or {}).get("email", "")
             contact_val = email_pref or contact_in  # zapisuj e-mail gdy dostępny
-            rows.append({"name": name, "position": pos, "contact": contact_val})
+            rows.append({"name": name, "position": pos,
+                        "contact": contact_val})
 
         all_days[date_str] = rows
         try:
-            plan_path.write_text(json.dumps(all_days, ensure_ascii=False, indent=2), encoding="utf-8")
+            plan_path.write_text(json.dumps(
+                all_days, ensure_ascii=False, indent=2), encoding="utf-8")
             info = f"Zapisano {len(rows)} wierszy dla {date_str}."
         except Exception as e:
             error = f"Nie udało się zapisać: {e}"
@@ -851,6 +1056,8 @@ def grafik_view(request, group):
 # -------------------------
 # SKRÓT „Ustaw grafik”
 # -------------------------
+
+
 @never_cache
 def set_schedule(request, group):
     if request.session.get("auth_group") != group:
@@ -862,6 +1069,8 @@ def set_schedule(request, group):
 # -------------------------
 # WYLOGOWANIE
 # -------------------------
+
+
 @require_POST
 def logout_view(request, group=None):
     request.session.flush()
@@ -873,6 +1082,8 @@ def logout_view(request, group=None):
 # -------------------------
 # USUWANIE DZIAŁU
 # -------------------------
+
+
 def delete_group(request, group):
     groups = load_groups()
     g = get_group(groups, group)
@@ -910,7 +1121,8 @@ def delete_group(request, group):
                     except Exception:
                         pass
 
-            groups = [gr for gr in groups if gr["name"].strip() != group.strip()]
+            groups = [gr for gr in groups if gr["name"].strip() !=
+                      group.strip()]
             save_groups(groups)
             return redirect("start")
         else:
@@ -921,12 +1133,16 @@ def delete_group(request, group):
 # -------------------------
 # PING
 # -------------------------
+
+
 def ping(request):
     return HttpResponse("Działa web! ✅")
 
 # -------------------------
 # PODGLĄDOWA TABELA
 # -------------------------
+
+
 def tabela(request, group):
     month = request.GET.get("month", "Styczeń")
     year = request.GET.get("year", "2025")
@@ -941,6 +1157,8 @@ def tabela(request, group):
 # -------------------------
 # AUTOSAVE KOMÓRKI
 # -------------------------
+
+
 def month_to_name(m):
     if isinstance(m, int) or (isinstance(m, str) and m.isdigit()):
         num = int(m)
@@ -950,11 +1168,13 @@ def month_to_name(m):
         raise ValueError("Nieznany numer miesiąca")
     return m
 
+
 def _ensure_row_len(row, n):
     row = list(row) if row else []
     if len(row) < n:
         row.extend([""] * (n - len(row)))
     return row
+
 
 @require_POST
 def autosave_cell(request, group):
@@ -995,11 +1215,34 @@ def autosave_cell(request, group):
 
     table[user_name][day - 1] = value
     save_table_to_file(group, month, year, table)
+
+    # --- LOG HISTORII (po ID) ---
+    try:
+        emp = next((u for u in load_users_norm(group)
+                   if u["name"] == user_name), None)
+        if emp:
+            y = int(year)
+            m = POLISH_MONTHS[month]
+            d = int(day)
+            day_iso = f"{y:04d}-{m:02d}-{d:02d}"
+            TOKENS_LOG = {"1", "2", "3", "C"}
+            tok = (value or "").strip().upper()
+
+            if tok in TOKENS_LOG:
+                append_history(emp["id"], day_iso, group, tok)
+            else:
+                # pusta/inna wartość = czyszczenie
+                append_history(emp["id"], day_iso, group, "")
+    except Exception:
+        pass
+
     return JsonResponse({"ok": True})
 
 # -------------------------
 # EDYCJA + PDF
 # -------------------------
+
+
 def edit_table(request, group):
     month = request.GET.get("month", "Styczeń")
     year = request.GET.get("year", "2025")
@@ -1013,8 +1256,35 @@ def edit_table(request, group):
         for u in users:
             row = []
             for d in days_list:
-                row.append((request.POST.get(f"v__{u['name']}__{d}") or "").strip())
+                row.append(
+                    (request.POST.get(f"v__{u['name']}__{d}") or "").strip())
             table[u["name"]] = row
+
+        # --- LOG HISTORII PRZED ZAPISEM (różnice) ---
+        TOKENS_LOG = {"1", "2", "3", "C"}
+        try:
+            for u in users:
+                name = u["name"]
+                emp_id = u.get("id")
+                if not emp_id:
+                    continue
+                new_row = table.get(name, []) or []
+                old_row = (existing.get(name, []) or [])
+                mnum = POLISH_MONTHS[month]
+                ynum = int(year)
+                for i, tok in enumerate(new_row, start=1):
+                    new_tok = (tok or "").strip().upper()
+                    old_tok = (old_row[i-1].strip().upper() if len(old_row)
+                               >= i and isinstance(old_row[i-1], str) else "")
+                    if new_tok != old_tok:
+                        day_iso = f"{ynum:04d}-{mnum:02d}-{i:02d}"
+                        if new_tok in TOKENS_LOG:
+                            append_history(emp_id, day_iso, group, new_tok)
+                        else:
+                            # czyszczenie
+                            append_history(emp_id, day_iso, group, "")
+        except Exception:
+            pass
 
         json_path = save_table_to_file(group, month, year, table)
         action = request.POST.get("action", "save")
@@ -1076,6 +1346,8 @@ def edit_table(request, group):
 # -------------------------
 # PROFIL PRACOWNIKA
 # -------------------------
+
+
 @never_cache
 def employee_profile(request, group, emp_name):
     """
@@ -1088,7 +1360,8 @@ def employee_profile(request, group, emp_name):
 
     emp_name = unquote(emp_name).strip()
     users = load_users_norm(group)
-    idx = next((i for i, u in enumerate(users) if u.get("name") == emp_name), None)
+    idx = next((i for i, u in enumerate(users)
+               if u.get("name") == emp_name), None)
     if idx is None:
         raise Http404("Nie znaleziono takiego pracownika w tym dziale.")
 
@@ -1124,7 +1397,8 @@ def employee_profile(request, group, emp_name):
                 else:
                     info = "Dodano nową umiejętność."
             else:
-                info = (info + " Umiejętność już istnieje.") if info else "Umiejętność już istnieje."
+                info = (
+                    info + " Umiejętność już istnieje.") if info else "Umiejętność już istnieje."
 
         selected = set(request.POST.getlist("skills") or [])
         if new_skill:
@@ -1177,3 +1451,209 @@ def employee_profile(request, group, emp_name):
             "error": error,
         },
     )
+
+# -------------------------
+# EKSPORT / IMPORT STATYSTYK I SIATKI
+# -------------------------
+
+
+@never_cache
+def export_profiles_with_stats_csv(request, group):
+    """
+    Eksport profili + statystyki (workdays/ndz/l4) dla podanego zakresu.
+    GET parametry:
+      from_month, from_year, to_month, to_year
+    """
+    if request.session.get("auth_group") != group:
+        return redirect("login", group=group)
+
+    users = load_users_norm(group)
+
+    # zakres
+    from_month = request.GET.get("from_month", "Styczeń")
+    from_year = request.GET.get("from_year", "2025")
+    to_month = request.GET.get("to_month", "Grudzień")
+    to_year = request.GET.get("to_year", "2025")
+
+    # policz zakres dat
+    my = months_between(from_month, from_year, to_month, to_year)
+    import calendar as _cal
+    start_y = int(my[0][1])
+    start_m = POLISH_MONTHS[my[0][0]]
+    end_y = int(my[-1][1])
+    end_m = POLISH_MONTHS[my[-1][0]]
+    date_from = date(start_y, start_m, 1)
+    date_to = date(end_y, end_m, _cal.monthrange(end_y, end_m)[1])
+
+    # statystyki
+    hist_stats = count_stats_from_history(users, date_from, date_to)
+    if not any((v["ndz"] or v["l4"] or v["workdays"]) for v in hist_stats.values()):
+        stats = count_stats(group, users, my)
+    else:
+        stats = hist_stats
+
+    sio = io.StringIO()
+    writer = csv.writer(sio, delimiter=';')
+    headers = [
+        "Imię i nazwisko", "Stanowisko", "Kontakt (tel.)", "E-mail",
+        "Termin badań (RRRR-MM-DD)", "Umiejętności",
+        f"Dni robocze ({from_month} {from_year} – {to_month} {to_year})",
+        "Niedziele/Święta", "L4"
+    ]
+    writer.writerow(headers)
+
+    for u in users:
+        skills_on = [k for k, v in (u.get("skills") or {}).items() if v]
+        skills_str = ", ".join(skills_on)
+        s = stats.get(u["name"], {"workdays": 0, "ndz": 0, "l4": 0})
+        writer.writerow([
+            u.get("name", ""),
+            u.get("position", ""),
+            u.get("contact", ""),
+            u.get("email", ""),
+            u.get("medical_exam", ""),
+            skills_str,
+            s["workdays"], s["ndz"], s["l4"]
+        ])
+
+    csv_content = "\ufeff" + sio.getvalue()
+    filename = f"{slugify(group)}_profile_stats_{date.today().isoformat()}.csv"
+    resp = HttpResponse(csv_content, content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
+
+
+@never_cache
+def export_month_tokens_csv(request, group):
+    """
+    Eksport siatki miesiąca (tokeny 1/2/3/C) do CSV: Imię i nazwisko;1;2;...;N
+    GET: month, year
+    """
+    if request.session.get("auth_group") != group:
+        return redirect("login", group=group)
+
+    month = request.GET.get("month", "Styczeń")
+    year = request.GET.get("year", "2025")
+
+    users = load_users_norm(group)
+    data = load_month_data(group, month, year)
+    n_days = days_in_month(month, year)
+
+    sio = io.StringIO()
+    writer = csv.writer(sio, delimiter=';')
+    header = ["Imię i nazwisko"] + [str(d) for d in range(1, n_days+1)]
+    writer.writerow(header)
+
+    for u in users:
+        row = data.get(u["name"], []) or []
+        values = [(row[d-1] if len(row) >= d else "")
+                  for d in range(1, n_days+1)]
+        writer.writerow([u["name"]] + values)
+
+    csv_content = "\ufeff" + sio.getvalue()
+    filename = f"{slugify(group)}_{slugify(month)}_{year}_siatka.csv"
+    resp = HttpResponse(csv_content, content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
+
+
+@require_POST
+@never_cache
+@require_POST
+@never_cache
+def import_month_tokens_csv(request, group):
+    """
+    Import siatki miesiąca z CSV (format jak w eksporcie).
+    POST: file (CSV) + month, year
+    Nadpisuje miesiąc i aktualizuje historię (append_history) per zmieniona komórka.
+    """
+    if request.session.get("auth_group") != group:
+        return redirect("login", group=group)
+
+    uploaded = request.FILES.get("csv") or request.FILES.get("file")
+    if not uploaded:
+        return redirect(f"/panel/{group}/?info=Nie%20wybrano%20pliku%20CSV.")
+
+    month = request.POST.get("month", "Styczeń")
+    year = request.POST.get("year", "2025")
+
+    # <<< KLUCZOWA ZMIANA: czytamy raz >>>
+    raw = uploaded.read()
+    try:
+        text = raw.decode("utf-8-sig")
+    except Exception:
+        try:
+            text = raw.decode("cp1250")
+        except Exception:
+            return redirect(f"/panel/{group}/?info=Nie%20uda%C5%82o%20si%C4%99%20odczyta%C4%87%20pliku%20(kodowanie).")
+
+    # delimiter ',' lub ';'
+    try:
+        dialect = csv.Sniffer().sniff(text.splitlines()[0])
+        delim = dialect.delimiter if dialect.delimiter in (',', ';') else ';'
+    except Exception:
+        delim = ';'
+
+    reader = csv.reader(io.StringIO(text), delimiter=delim)
+    rows = list(reader)
+    if not rows:
+        return redirect(f"/panel/{group}/?info=Pusty%20CSV.")
+
+    header = rows[0]
+    try:
+        day_cols = [int(c) for c in header[1:]]
+    except Exception:
+        return redirect(f"/panel/{group}/?info=Z%C5%82y%20nag%C5%82%C3%B3wek%20dni.")
+
+    n_days = days_in_month(month, year)
+    if len(day_cols) != n_days or any(day_cols[i] != i+1 for i in range(n_days)):
+        return redirect(f"/panel/{group}/?info=Nag%C5%82%C3%B3wek%20dni%20nie%20pasuje%20do%20miesi%C4%85ca%20({n_days}%20dni).")
+
+    users = load_users_norm(group)
+    users_by_name = {u["name"]: u for u in users}
+    existing = load_month_data(group, month, year)
+
+    TOKENS = {"1", "2", "3", "C"}
+    updated_table = {}
+    mnum = POLISH_MONTHS[month]
+    ynum = int(year)
+
+    imported = 0
+    for r in rows[1:]:
+        if not r:
+            continue
+        name = (r[0] or "").strip()
+        if not name:
+            continue
+        vals = [(r[i] if i < len(r) else "").strip()
+                for i in range(1, 1+n_days)]
+        vals_norm = [(v.upper() if v.upper() in TOKENS else "") for v in vals]
+        updated_table[name] = vals_norm
+        imported += 1
+
+    # zaktualizuj historię dla różnic
+    try:
+        for name, new_row in updated_table.items():
+            emp = users_by_name.get(name)
+            if not emp:
+                continue
+            old_row = (existing.get(name, []) or [])
+            for i, new_tok in enumerate(new_row, start=1):
+                old_tok = (old_row[i-1].strip().upper() if len(old_row)
+                           >= i and isinstance(old_row[i-1], str) else "")
+                new_tok = (new_tok or "").strip().upper()
+                if new_tok != old_tok:
+                    day_iso = f"{ynum:04d}-{mnum:02d}-{i:02d}"
+                    append_history(emp["id"], day_iso, group, new_tok)
+    except Exception:
+        pass
+
+    # uzupełnij/podmień miesiąc
+    for u in users:
+        name = u["name"]
+        row = updated_table.get(name, existing.get(name, []) or [])
+        row = (row + [""] * n_days)[:n_days]
+        updated_table[name] = row
+
+    save_table_to_file(group, month, year, updated_table)
+    return redirect(f"/panel/{group}/?info=Zaimportowano%20siatk%C4%99%20({imported}%20wierszy).")
