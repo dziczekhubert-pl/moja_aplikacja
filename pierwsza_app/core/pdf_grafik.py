@@ -185,7 +185,7 @@ def generate_pdf_response(file_name: str) -> FileResponse:
                 color = colors.green
             else:
                 color = colors.white
-            cmds.append(('BACKGROUND', (col, 0), (col, -1), color))
+            cmds.append(('BACKGROUND', (col, 0), (col, -2), color))
 
         cmds += [
             ('BACKGROUND', (col_wyk_xz, 1), (col_wyk_xz, -2), colors.lightgrey),

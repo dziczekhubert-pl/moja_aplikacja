@@ -33,22 +33,50 @@
             margin-bottom: 8px;
         }
 
-        a.btn,
-        button.btn {
-            display: inline-block;
-            padding: 6px 10px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            text-decoration: none;
-            color: inherit;
-            background: #fafafa;
-            cursor: pointer;
-        }
+        /* --- PRZYCISKI (scalone style) --- */
+button,
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  line-height: 1;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  height: 32px; /* stała wysokość dla spójności */
+}
 
-        a.btn:hover,
-        button.btn:hover {
-            background: #f0f0f0;
-        }
+/* Hover – delikatne podświetlenie */
+button:hover,
+.btn:hover {
+  background: #f9fafb;
+}
+
+/* Wersja mała */
+button.small,
+.btn.small {
+  padding: 2px 8px;
+  font-size: 12px;
+  height: auto; /* mniejsze bez wymuszonej wysokości */
+}
+
+/* Wersja niebezpieczna (usuń) */
+button.danger,
+.btn.danger {
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+button.danger:hover,
+.btn.danger:hover {
+  background: #fff1f2;
+}
+
 
         hr {
             border: 0;
@@ -147,9 +175,14 @@
 
     {% block content %}{% endblock %}
 
-    <footer class="muted" style="margin-top:24px;">
-        <small>Hubert Dziczek {{ now|date:"Y" }} - optymalizacje.procesow@gmail.com </small>
-    </footer>
+    <footer class="footer" style="margin-top:24px;">
+    <small>
+        Hubert Dziczek – 
+        <a href="mailto:optymalizacje.procesow@gmail.com" style="color: inherit; text-decoration: none;">
+            optymalizacje.procesow@gmail.com
+        </a>
+    </small>
+</footer>
 
 </body>
 </html>

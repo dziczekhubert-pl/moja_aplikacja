@@ -13,49 +13,94 @@
       #fff;
     margin-bottom: 18px;
   }
-  .hero h1 { font-size: clamp(28px, 5vw, 44px); line-height:1.1; margin: 10px 0 4px; }
-  .hero p { color: var(--muted); margin: 0; }
+
+  .hero h1 {
+    font-size: clamp(28px, 5vw, 44px);
+    line-height: 1.1;
+    margin: 10px 0 4px;
+  }
+
+  .hero p {
+    color: var(--muted);
+    margin: 0;
+  }
 
   .grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr); /* 4 kolumny */
-  gap: 12px;
-}
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    /* 4 kolumny */
+    gap: 12px;
+  }
 
   .card {
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: #fff;
-  padding: 14px;
-  box-shadow: 0 6px 18px rgba(0,0,0,.04);
-  width: 100%;   /* zamiast 260px */
-}
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: #fff;
+    padding: 14px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .04);
+    width: 100%;
+    /* zamiast 260px */
+  }
 
-  .actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
 
-  .btn-primary { background:#fff; color:#000 !important; border:0.5px solid var(--border); }
-  .btn-danger { color:#b00020 !important; border:0.5px solid #e3b6bd; background:#fff5f6; }
+  .btn-primary {
+    background: #fff;
+    color: #000 !important;
+    border: 0.5px solid var(--border);
+  }
+
+  .btn-danger {
+    color: #b00020 !important;
+    border: 0.5px solid #e3b6bd;
+    background: #fff5f6;
+  }
 
   .empty {
-    border: 0.5px dashed var(--border); border-radius: 14px; padding: 18px; background:#fcfcfc;
-    text-align:center; color: var(--muted);
+    border: 0.5px dashed var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    background: #fcfcfc;
+    text-align: center;
+    color: var(--muted);
   }
 
   details.add {
-    border:0.5px solid var(--border); border-radius:14px; padding: 14px; background:#fff; margin-top: 14px;
+    border: 0.5px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    background: #fff;
+    margin-top: 14px;
   }
+
   details.add summary {
-    list-style:none; cursor:pointer; font-weight:700; color:#2b6cb0;
+    list-style: none;
+    cursor: pointer;
+    font-weight: 700;
+    color: #2b6cb0;
   }
-  details.add summary::-webkit-details-marker { display:none; }
+
+  details.add summary::-webkit-details-marker {
+    display: none;
+  }
 
   /* Formularz - pola wejściowe */
-  .form-grid { 
-    display:grid; 
-    gap: 4px;                /* mniejszy odstęp między polami */
-    grid-template-columns:1fr; 
+  .form-grid {
+    display: grid;
+    gap: 4px;
+    /* mniejszy odstęp między polami */
+    grid-template-columns: 1fr;
   }
-  .form-grid p { margin: 0; } /* usuwa dodatkowy margines akapitów */
+
+  .form-grid p {
+    margin: 0;
+  }
+
+  /* usuwa dodatkowy margines akapitów */
   .form-grid input {
     width: 300px;
     max-width: 100%;
@@ -72,23 +117,23 @@
 </section>
 
 {% if error %}
-  <div class="flash" style="border-color:#f4c7c7;background:#fff7f7;color:#8b0000">{{ error }}</div>
+<div class="flash" style="border-color:#f4c7c7;background:#fff7f7;color:#8b0000">{{ error }}</div>
 {% endif %}
 
 {% if groups %}
-  <div class="grid">
-    {% for g in groups %}
-      <div class="card">
-        <h4>{{ g.name }}</h4>
-        <div class="actions">
-          <a class="btn btn-primary" href="{% url 'login' g.name %}">Zaloguj</a>
-          <a class="btn btn-danger" href="{% url 'delete_group' g.name %}">Usuń</a>
-        </div>
-      </div>
-    {% endfor %}
+<div class="grid">
+  {% for g in groups %}
+  <div class="card">
+    <h4>{{ g.name }}</h4>
+    <div class="actions">
+      <a class="btn btn-primary" href="{% url 'login' g.name %}">Zaloguj</a>
+      <a class="btn btn-danger" href="{% url 'delete_group' g.name %}">Usuń</a>
+    </div>
   </div>
+  {% endfor %}
+</div>
 {% else %}
-  <div class="empty">Na razie nie masz żadnych działów.</div>
+<div class="empty">Na razie nie masz żadnych działów.</div>
 {% endif %}
 
 <details class="add">
@@ -97,8 +142,8 @@
     <form method="post">
       {% csrf_token %}
       <div class="form-grid">
-        <p><label>Nazwa<br><input name="name" required></label></p>
-        <p><label>Login<br><input name="login" required></label></p>
+        <p><label>Nazwa działu<br><input name="name" required></label></p>
+        <p><label>Login użytkownika<br><input name="login" required></label></p>
         <p><label>Hasło<br><input name="password" type="password" required></label></p>
       </div>
       <button class="btn btn-primary" type="submit" style="margin-top:8px;">Utwórz dział</button>

@@ -5,6 +5,7 @@
   <meta charset="utf-8">
   <title>{{ month }} {{ year }} – edycja</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <style>
     :root{
       --b:#c7c7c7;         /* ramki */
@@ -13,37 +14,115 @@
       --sat:#16a34a;       /* zielony (sobota) */
       --cellh:26px;        /* wysokość pól */
       --page:#f5f6f7;      /* tło strony (dla szczeliny) */
+      --ink:#111827;       /* kolor tekstu */
     }
-    body{ font-family: system-ui, Segoe UI, Roboto, Arial, sans-serif; margin:12px; background:var(--page); }
-    h2{ text-align:center; margin:12px 0 14px; font-size:28px; }
-    .toolbar{ display:flex; justify-content:center; gap:8px; margin-bottom:8px; }
-    .toolbar button{
-      padding:6px 10px; border:1px solid var(--b); background:#fff; cursor:pointer; border-radius:4px;
+
+    /* Strona */
+    html,body{ height:100%; }
+    body{
+      font-family: system-ui, Segoe UI, Roboto, Arial, sans-serif;
+      margin:0;
+      background:linear-gradient(180deg,#f7fafc 0%, #eef2f7 100%);
+      color:var(--ink);
     }
-    .wrap{ width:100%; overflow:auto; }
-    table{ border-collapse:collapse; font-size:14px; background:#fff; }
+
+    /* PANEL NAGŁÓWKA (tytuł + przyciski) */
+    .hero{
+  margin:10px;
+  padding:16px 16px 14px;
+
+  /* jak w podanym przykładzie panelu */
+  border:0.5px solid var(--b);
+  border-radius:18px;
+  background:
+    radial-gradient(90% 90% at 0% 0%,  #e9f2ff 0%, transparent 60%),
+    radial-gradient(90% 90% at 100% 0%, #e9ffef 0%, transparent 60%),
+    #fff;
+
+  /* delikatny „panelowy” cień */
+  box-shadow:0 6px 18px rgba(0,0,0,.04);
+}
+
+/* można lekko zmniejszyć tytuł, żeby pasował do nowego stylu */
+.hero h2{
+  text-align:center;
+  margin:6px 0 10px;
+  font-size:28px;
+  line-height:1.2;
+  font-weight:700;
+  letter-spacing:.5px;
+  color:#0f172a;
+}
+
+
+    /* Przyciski narzędziowe */
+    .toolbar{
+      display:flex;
+      justify-content:center;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .btn{
+      appearance:none;
+      border:1px solid var(--b);
+      background:#fff;
+      border-radius:8px;       /* było 10px */
+      padding:6px 10px;        /* mniejsze odstępy */
+      font-size:12px;          /* mniejsza czcionka */
+      line-height:1;
+      cursor:pointer;
+      box-shadow:0 1px 1px rgba(0,0,0,.03);
+      transition:transform .06s ease, box-shadow .12s ease, border-color .12s ease;
+    }
+    .btn:hover{ box-shadow:0 2px 6px rgba(0,0,0,.06); }
+    .btn:active{ transform:translateY(1px); }
+    .btn:focus-visible{ outline:2px solid #93c5fd; outline-offset:2px; }
+
+    /* KONTENER TABELI — osobne obramowanie */
+    .outer{
+      margin:10px;
+      background:#fff;
+      border:1px solid #e5e7eb;
+      border-radius:16px;
+      box-shadow:0 1px 2px rgba(0,0,0,.04);
+      overflow:hidden;
+    }
+    .wrap{
+      width:100%;
+      overflow:auto;
+    }
+
+    /* Tabela */
+    table{
+      border-collapse:collapse;
+      font-size:14px;
+      width:100%;
+      min-width:980px;
+    }
     th, td{ border:1px solid var(--b); padding:0; }
     th{ background:var(--head); }
-    th.lp, td.lp{ width:40px; text-align:center; padding:3px 4px; }
-    th.name, td.name{ width:260px; padding:3px 6px; }
 
-    /* nagłówki dni */
+    th.lp, td.lp{ width:44px; text-align:center; padding:3px 4px; }
+    th.name, td.name{ width:280px; padding:6px 8px; background:#fff; position:sticky; left:0; z-index:3; }
+    thead th.name{ z-index:4; }
+
+    /* Dni */
     th.day, td.day{ width:28px; text-align:center; }
     th.day.sun { background: var(--sun); color:#fff; }
     th.day.sat { background: var(--sat); color:#fff; }
 
-    /* kolorowanie całych kolumn weekendów/świąt */
+    /* Kolorowanie całych kolumn weekendów/świąt */
     td.day.sun  { background: var(--sun);  color:#fff; }
     td.day.sat  { background: var(--sat);  color:#fff; }
 
-    /* inputy w kolorowych polach */
+    /* Inputy w kolorowych polach */
     td.day.sun input,
     td.day.sat input {
       background: transparent;
       color: #fff;
     }
 
-    /* UJEDNOLICONE "KRATKI" */
+    /* „Kratki” */
     .box{
       display:block;
       width:100%;
@@ -61,14 +140,18 @@
       text-align:center;
       font-size:13px;
       text-transform:uppercase;
+      letter-spacing:.2px;
     }
-    td.day input:focus{ box-shadow:inset 0 0 0 1px rgba(122,162,255,.5); }
+    td.day input:focus{
+      box-shadow:inset 0 0 0 2px rgba(99,102,241,.35);
+      border-radius:2px;
+    }
 
-    /* MINI LICZNIKI */
-    th.mini, td.mini{ width:44px; text-align:center; }
-    th.mini{ background:#d1d5db; font-weight:600; }
+    /* Mini liczniki */
+    th.mini, td.mini{ width:48px; text-align:center; }
+    th.mini{ background:#d1d5db; font-weight:700; color:#111827; }
 
-    /* SZCZELINA MIĘDZY DNIAMI A MINI */
+    /* Szczelina między dniami a mini */
     th.gap, td.gap{
       width:16px;
       background:var(--page);
@@ -78,10 +161,24 @@
     thead th.day:last-of-type,
     tbody td.day:last-of-type{ border-right:0; }
 
-    .sticky-head { position: sticky; top: 0; z-index: 5; }
+    /* Sticky nagłówek */
+    .sticky-head { position: sticky; top: 0; z-index: 5; box-shadow:0 2px 0 rgba(0,0,0,.03); }
+
+    /* Naprzemienne tła wierszy dla czytelności */
+    tbody tr:nth-child(even) td:not(.sun):not(.sat):not(.gap){
+      background:#fafafa;
+    }
+
+    /* Lp kolumna „przyklejona” jak imię */
+    th.lp, td.lp{ position:sticky; left:0; z-index:3; border-right:1px solid var(--b); background:#fff; }
+    thead th.lp{ z-index:4; }
+
+    /* Przycięcie „szczeliny” przy sticky kolumnach */
+    td.name{ box-shadow:1px 0 0 var(--b); }
+    td.lp{ box-shadow:1px 0 0 var(--b); }
   </style>
 
-  <!-- URL do autosave + CSRF -->
+  <!-- URL do autosave + CSRF (NIERUSZANE) -->
   <script>
     window.AUTOSAVE_URL = "{% url 'autosave_cell' group=group %}";
     function getCookie(name){
@@ -93,229 +190,237 @@
 </head>
 <body>
 
-<h2>{{ month }} {{ year }}</h2>
+  <!-- Formularz obejmuje oba panele, ale obramowania są ROZDZIELONE -->
+  <form method="post">
+    {% csrf_token %}
 
-<form method="post">
-  {% csrf_token %}
-  <div class="toolbar">
-    <button type="submit" name="action" value="grafik">Drukuj grafik</button>
-    <button type="submit" name="action" value="karty">Drukuj karty pracy</button>
-    <button type="submit" name="action" value="save_back">Powrót</button>
-  </div>
+    <!-- PANEL 1: nagłówek + przyciski (osobne obramowanie) -->
+    <div class="hero">
+      <h2>{{ month }} {{ year }}</h2>
+      <div class="toolbar">
+        <button class="btn" type="submit" name="action" value="grafik">Drukuj grafik</button>
+        <button class="btn" type="submit" name="action" value="karty">Drukuj karty pracy</button>
+        <button class="btn" type="submit" name="action" value="save_back">Powrót</button>
+      </div>
+    </div>
 
-  <div class="wrap">
-    <table>
-      <thead class="sticky-head">
-        <tr>
-          <th class="lp">Lp.</th>
-          <th class="name">Nazwisko i imię</th>
-          {% for d in days %}
-            <th class="day" id="hd{{ d }}" data-day="{{ d }}">{{ d }}</th>
-          {% endfor %}
+    <!-- PANEL 2: tabela (osobne obramowanie) -->
+    <div class="outer">
+      <div class="wrap">
+        <table>
+          <thead class="sticky-head">
+            <tr>
+              <th class="lp">Lp.</th>
+              <th class="name">Nazwisko i imię</th>
+              {% for d in days %}
+                <th class="day" id="hd{{ d }}" data-day="{{ d }}">{{ d }}</th>
+              {% endfor %}
 
-          <!-- szczelina -->
-          <th class="gap" aria-hidden="true"></th>
+              <!-- szczelina -->
+              <th class="gap" aria-hidden="true"></th>
 
-          <!-- mini liczniki -->
-          <th class="mini">X</th>
-          <th class="mini">Xz</th>
-          <th class="mini">W</th>
-          <th class="mini">Nd</th>
-          <th class="mini">3ki</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in rows %}
-        <tr class="user-row" data-row="{{ forloop.counter0 }}" data-user="{{ r.name }}">
-          <td class="lp">{{ forloop.counter }}</td>
-          <td class="name">{{ r.name }}</td>
+              <!-- mini liczniki -->
+              <th class="mini">X</th>
+              <th class="mini">Xz</th>
+              <th class="mini">W</th>
+              <th class="mini">Nd</th>
+              <th class="mini">3ki</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr class="user-row" data-row="{{ forloop.counter0 }}" data-user="{{ r.name }}">
+              <td class="lp">{{ forloop.counter }}</td>
+              <td class="name">{{ r.name }}</td>
 
-          {% for day in r.days %}
-          <td class="day">
-            <span class="box">
-              <input
-                name="v__{{ r.name }}__{{ day.d }}"
-                value="{{ day.val }}"
-                data-day="{{ day.d }}"
-                autocomplete="off"
-                autocapitalize="off"
-                spellcheck="false"
-                inputmode="text"
-              />
-            </span>
-          </td>
-          {% endfor %}
+              {% for day in r.days %}
+              <td class="day">
+                <span class="box">
+                  <input
+                    name="v__{{ r.name }}__{{ day.d }}"
+                    value="{{ day.val }}"
+                    data-day="{{ day.d }}"
+                    autocomplete="off"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    inputmode="text"
+                  />
+                </span>
+              </td>
+              {% endfor %}
 
-          <!-- szczelina -->
-          <td class="gap" aria-hidden="true"></td>
+              <!-- szczelina -->
+              <td class="gap" aria-hidden="true"></td>
 
-          <!-- liczniki -->
-          <td class="mini"><span class="box cntX">0</span></td>
-          <td class="mini"><span class="box cntXz">0</span></td>
-          <td class="mini"><span class="box cntW">0</span></td>
-          <td class="mini"><span class="box cntNd">0</span></td>
-          <td class="mini"><span class="box cnt3">0</span></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</form>
+              <!-- liczniki -->
+              <td class="mini"><span class="box cntX">0</span></td>
+              <td class="mini"><span class="box cntXz">0</span></td>
+              <td class="mini"><span class="box cntW">0</span></td>
+              <td class="mini"><span class="box cntNd">0</span></td>
+              <td class="mini"><span class="box cnt3">0</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </form>
 
-<script>
-(function(){
-  var plMonths = {
-    "Styczeń":1,"Luty":2,"Marzec":3,"Kwiecień":4,"Maj":5,"Czerwiec":6,
-    "Lipiec":7,"Sierpień":8,"Wrzesień":9,"Październik":10,"Listopad":11,"Grudzień":12
-  };
-  var monthName = "{{ month }}";
-  var year = parseInt("{{ year }}", 10);
-  var m = plMonths[monthName];
+  <script>
+  (function(){
+    /* === KALENDARZ + LICZNIKI (BEZ ZMIAN W ZAPISYWANIU) === */
+    var plMonths = {
+      "Styczeń":1,"Luty":2,"Marzec":3,"Kwiecień":4,"Maj":5,"Czerwiec":6,
+      "Lipiec":7,"Sierpień":8,"Wrzesień":9,"Październik":10,"Listopad":11,"Grudzień":12
+    };
+    var monthName = "{{ month }}";
+    var year = parseInt("{{ year }}", 10);
+    var m = plMonths[monthName];
 
-  var FIXED = [
-    [1,1],[6,1],[1,5],[3,5],[15,8],[1,11],[11,11],[25,12],[26,12]
-  ];
+    var FIXED = [
+      [1,1],[6,1],[1,5],[3,5],[15,8],[1,11],[11,11],[25,12],[26,12]
+    ];
 
-  function easterDate(y){
-    var a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),
-        g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,
-        l=(32+2*e+2*i-h-k)%7,m_ = Math.floor((a+11*h+22*l)/451),
-        month=Math.floor((h+l-7*m_+114)/31),day=((h+l-7*m_+114)%31)+1;
-    return new Date(y, month-1, day);
-  }
-  function addDays(dt,n){ var d=new Date(dt.getTime()); d.setDate(d.getDate()+n); return d; }
-
-  function polishHolidays(y){
-    var arr = FIXED.slice();
-    var easter = easterDate(y);
-    var easterMon = addDays(easter,1);
-    var corpusChristi = addDays(easter,60);
-    arr.push([easterMon.getDate(),easterMon.getMonth()+1]);
-    arr.push([corpusChristi.getDate(),corpusChristi.getMonth()+1]);
-    return arr;
-  }
-
-  var HOL = polishHolidays(year);
-  function isHoliday(d, m){
-    for (var i=0;i<HOL.length;i++) if (HOL[i][0]===d && HOL[i][1]===m) return true;
-    return false;
-  }
-  function weekday(y,m,d){ return new Date(y,m-1,d).getDay(); }
-
-  var ths = document.querySelectorAll('th.day');
-  ths.forEach(function(th, idx){
-    var d = parseInt(th.dataset.day,10);
-    var w = weekday(year, m, d);
-    if (w===0 || isHoliday(d,m)) {
-      th.classList.add('sun');
-      document.querySelectorAll('tbody tr').forEach(tr => tr.querySelectorAll('td.day')[idx].classList.add('sun'));
+    function easterDate(y){
+      var a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),
+          g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,
+          l=(32+2*e+2*i-h-k)%7,m_ = Math.floor((a+11*h+22*l)/451),
+          month=Math.floor((h+l-7*m_+114)/31),day=((h+l-7*m_+114)%31)+1;
+      return new Date(y, month-1, day);
     }
-    else if (w===6) {
-      th.classList.add('sat');
-      document.querySelectorAll('tbody tr').forEach(tr => tr.querySelectorAll('td.day')[idx].classList.add('sat'));
+    function addDays(dt,n){ var d=new Date(dt.getTime()); d.setDate(d.getDate()+n); return d; }
+
+    function polishHolidays(y){
+      var arr = FIXED.slice();
+      var easter = easterDate(y);
+      var easterMon = addDays(easter,1);
+      var corpusChristi = addDays(easter,60);
+      arr.push([easterMon.getDate(),easterMon.getMonth()+1]);
+      arr.push([corpusChristi.getDate(),corpusChristi.getMonth()+1]);
+      return arr;
     }
-  });
 
-  function isSunHeader(dayNum){
-    var th = document.getElementById("hd"+dayNum);
-    return th && th.classList.contains('sun');
-  }
+    var HOL = polishHolidays(year);
+    function isHoliday(d, m){
+      for (var i=0;i<HOL.length;i++) if (HOL[i][0]===d && HOL[i][1]===m) return true;
+      return false;
+    }
+    function weekday(y,m,d){ return new Date(y,m-1,d).getDay(); }
 
-  function recalcRow(tr){
-    var xs=0, xzs=0, ws=0, nds=0, tris=0;
-    tr.querySelectorAll('td.day input').forEach(function(inp){
-      var raw = (inp.value || "").trim();
-      if (!raw) return;
-      var upper = raw.toUpperCase();
-      var d = parseInt(inp.dataset.day || "0", 10);
-
-      if (upper==="X") xs++;
-      else if (upper==="XZ") xzs++;
-      else if (upper==="W") ws++;
-
-      if (raw==="3") tris++;
-
-      if ((raw==="1"||raw==="2"||raw==="3") && isSunHeader(d)) nds++;
-    });
-    tr.querySelector('.cntX').textContent  = xs;
-    tr.querySelector('.cntXz').textContent = xzs;
-    tr.querySelector('.cntW').textContent  = ws;
-    tr.querySelector('.cntNd').textContent = nds;
-    tr.querySelector('.cnt3').textContent  = tris;
-  }
-
-  function recalcAll(){
-    document.querySelectorAll('tr.user-row').forEach(recalcRow);
-  }
-
-  // ===== AUTOSAVE =====
-  const AUTOSAVE_URL = window.AUTOSAVE_URL;
-  let CSRF = window.CSRF_TOKEN;
-  if (!CSRF) {
-    const inp = document.querySelector('input[name=csrfmiddlewaretoken]');
-    if (inp) CSRF = inp.value;
-  }
-  const timers = new WeakMap();
-
-  async function autosave(inputEl){
-    const tr = inputEl.closest('tr.user-row');
-    if (!tr) return;
-
-    const userName = tr.dataset.user || "";
-    const day = parseInt(inputEl.dataset.day || "0", 10);
-    const value = (inputEl.value || "").trim();
-
-    if (!userName || !day) return;
-
-    const monthNum = plMonths["{{ month }}"] || "{{ month }}";
-    try{
-      const res = await fetch(AUTOSAVE_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': CSRF || '',
-        },
-        body: JSON.stringify({
-          year: "{{ year }}",
-          month: monthNum,      // backend akceptuje numer lub nazwę
-          user_name: userName,
-          day: day,
-          value: value
-        })
-      });
-      if (!res.ok){
-        const txt = await res.text();
-        console.warn('Autosave error', res.status, txt);
+    var ths = document.querySelectorAll('th.day');
+    ths.forEach(function(th, idx){
+      var d = parseInt(th.dataset.day,10);
+      var w = weekday(year, m, d);
+      if (w===0 || isHoliday(d,m)) {
+        th.classList.add('sun');
+        document.querySelectorAll('tbody tr').forEach(tr => tr.querySelectorAll('td.day')[idx].classList.add('sun'));
       }
-    }catch(e){
-      console.warn('Autosave network error', e);
+      else if (w===6) {
+        th.classList.add('sat');
+        document.querySelectorAll('tbody tr').forEach(tr => tr.querySelectorAll('td.day')[idx].classList.add('sat'));
+      }
+    });
+
+    function isSunHeader(dayNum){
+      var th = document.getElementById("hd"+dayNum);
+      return th && th.classList.contains('sun');
     }
-  }
 
-  function debounceAutosave(el, delay=400){
-    if (timers.has(el)) clearTimeout(timers.get(el));
-    const t = setTimeout(() => autosave(el), delay);
-    timers.set(el, t);
-  }
+    function recalcRow(tr){
+      var xs=0, xzs=0, ws=0, nds=0, tris=0;
+      tr.querySelectorAll('td.day input').forEach(function(inp){
+        var raw = (inp.value || "").trim();
+        if (!raw) return;
+        var upper = raw.toUpperCase();
+        var d = parseInt(inp.dataset.day || "0", 10);
 
-  document.addEventListener('input', function(e){
-    if (e.target && e.target.matches('td.day input')){
-      e.target.value = e.target.value.replace(/[a-ząćęłńóśżź]/g, ch => ch.toUpperCase());
-      var tr = e.target.closest('tr.user-row');
-      if (tr) recalcRow(tr);
-      debounceAutosave(e.target);
+        if (upper==="X") xs++;
+        else if (upper==="XZ") xzs++;
+        else if (upper==="W") ws++;
+
+        if (raw==="3") tris++;
+
+        if ((raw==="1"||raw==="2"||raw==="3") && isSunHeader(d)) nds++;
+      });
+      tr.querySelector('.cntX').textContent  = xs;
+      tr.querySelector('.cntXz').textContent = xzs;
+      tr.querySelector('.cntW').textContent  = ws;
+      tr.querySelector('.cntNd').textContent = nds;
+      tr.querySelector('.cnt3').textContent  = tris;
     }
-  });
 
-  document.addEventListener('blur', function(e){
-    if (e.target && e.target.matches('td.day input')){
-      autosave(e.target);
+    function recalcAll(){
+      document.querySelectorAll('tr.user-row').forEach(recalcRow);
     }
-  }, true);
 
-  recalcAll();
-})();
-</script>
+    /* ===== AUTOSAVE (NIERUSZANE) ===== */
+    const AUTOSAVE_URL = window.AUTOSAVE_URL;
+    let CSRF = window.CSRF_TOKEN;
+    if (!CSRF) {
+      const inp = document.querySelector('input[name=csrfmiddlewaretoken]');
+      if (inp) CSRF = inp.value;
+    }
+    const timers = new WeakMap();
+
+    async function autosave(inputEl){
+      const tr = inputEl.closest('tr.user-row');
+      if (!tr) return;
+
+      const userName = tr.dataset.user || "";
+      const day = parseInt(inputEl.dataset.day || "0", 10);
+      const value = (inputEl.value || "").trim();
+
+      if (!userName || !day) return;
+
+      const monthNum = plMonths["{{ month }}"] || "{{ month }}";
+      try{
+        const res = await fetch(AUTOSAVE_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': CSRF || '',
+          },
+          body: JSON.stringify({
+            year: "{{ year }}",
+            month: monthNum,      // backend akceptuje numer lub nazwę
+            user_name: userName,
+            day: day,
+            value: value
+          })
+        });
+        if (!res.ok){
+          const txt = await res.text();
+          console.warn('Autosave error', res.status, txt);
+        }
+      }catch(e){
+        console.warn('Autosave network error', e);
+      }
+    }
+
+    function debounceAutosave(el, delay=400){
+      if (timers.has(el)) clearTimeout(timers.get(el));
+      const t = setTimeout(() => autosave(el), delay);
+      timers.set(el, t);
+    }
+
+    document.addEventListener('input', function(e){
+      if (e.target && e.target.matches('td.day input')){
+        e.target.value = e.target.value.replace(/[a-ząćęłńóśżź]/g, ch => ch.toUpperCase());
+        var tr = e.target.closest('tr.user-row');
+        if (tr) recalcRow(tr);
+        debounceAutosave(e.target);
+      }
+    });
+
+    document.addEventListener('blur', function(e){
+      if (e.target && e.target.matches('td.day input')){
+        autosave(e.target);
+      }
+    }, true);
+
+    recalcAll();
+  })();
+  </script>
 
 </body>
 </html>

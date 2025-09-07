@@ -105,6 +105,17 @@
       border-radius:50%;
       background:#ef4444;
     }
+/* Linki w tabeli pracowników */
+table a {
+  color: var(--t);          /* główny kolor tekstu */
+  text-decoration: none;    /* bez podkreślenia */
+}
+
+table a:hover {
+  color: var(--mut);        /* przy najechaniu lekko wyszarzony */
+  text-decoration: underline; /* opcjonalne podkreślenie */
+}
+
   </style>
 </head>
 <body>
@@ -141,11 +152,11 @@
         </select>
       </label>
 
-      <button type="submit" name="action" value="go_to_edit">Przejdź do edycji</button>
-      <button type="submit" formmethod="get" formaction="{% url 'grafik' group %}">Ustaw grafik</button>
+      <button type="submit" name="action" value="go_to_edit">Rozlicz karty pracy</button>
+      <button type="submit" formmethod="get" formaction="{% url 'grafik' group %}">Rozpisz grafik</button>
     </form>
 
-    <button type="button" onclick="toggleForm('credForm', true, 'input')">Zmień logowanie</button>
+    <button type="button" onclick="toggleForm('credForm', true, 'input')">Zmień hasło</button>
     <form id="credForm" class="hidden togglable" method="post">
       {% csrf_token %}
       <input type="hidden" name="action" value="change_credentials">
@@ -168,7 +179,7 @@
       {% csrf_token %}
       <input type="hidden" name="action" value="add_employee">
       <input type="text" name="new_emp" placeholder="Nazwisko i imię" required>
-      <button>Dodaj</button>
+      <button>Dodaj pracownika</button>
     </form>
 
     <!-- Eksport CSV -->
@@ -214,18 +225,18 @@
         {% endfor %}
       </select>
     </label>
-    <button>Pokaż Nd./L4</button>
+    <button>Pokaż statystyki</button>
     <a class="muted" href="?">Wyczyść filtr</a>
   </form>
 </div>
 
 <!-- KARTA: Pracownicy -->
 <div class="card">
-  <h2>Pracownicy</h2>
+  <h2>Lista pracowników</h2>
   <table>
     <thead>
       <tr>
-        <th class="lp">Lp</th>
+        <th class="lp">Lp.</th>
         <th>Nazwisko i imię</th>
         <th>Stanowisko</th>
         <th>Kontakt</th>

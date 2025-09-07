@@ -1,71 +1,26 @@
 [
   {
-    "date": "2025-04-12",
-    "group": "Kardiologia",
-    "token": ""
-  },
-  {
-    "date": "2025-04-13",
-    "group": "Kardiologia",
-    "token": ""
-  },
-  {
-    "date": "2025-04-14",
-    "group": "Kardiologia",
-    "token": ""
-  },
-  {
-    "date": "2025-12-02",
-    "group": "Kardiologia",
-    "token": ""
-  },
-  {
-    "date": "2025-12-01",
-    "group": "Kardiologia",
-    "token": ""
-  },
-  {
-    "date": "2025-01-30",
-    "group": "Kardiologia",
-    "token": ""
-  },
-  {
     "date": "2025-01-29",
     "group": "Kardiologia",
     "token": ""
   },
   {
-    "date": "2025-01-18",
+    "date": "2025-01-25",
     "group": "Kardiologia",
     "token": ""
   },
   {
-    "date": "2025-01-01",
-    "group": "Kardiologia",
-    "token": "1"
-  },
-  {
-    "date": "2025-01-02",
-    "group": "Kardiologia",
-    "token": "1"
-  },
-  {
-    "date": "2025-01-03",
-    "group": "Kardiologia",
-    "token": "1"
-  },
-  {
-    "date": "2025-01-04",
-    "group": "Kardiologia",
-    "token": "1"
-  },
-  {
-    "date": "2025-01-05",
+    "date": "2025-01-23",
     "group": "Kardiologia",
     "token": ""
   },
   {
-    "date": "2025-01-06",
+    "date": "2025-01-21",
+    "group": "Kardiologia",
+    "token": ""
+  },
+  {
+    "date": "2025-01-10",
     "group": "Kardiologia",
     "token": ""
   },
@@ -73,5 +28,35 @@
     "date": "2025-01-07",
     "group": "Kardiologia",
     "token": ""
+  },
+  {
+    "date": "2025-01-01",
+    "group": "Kardiologia",
+    "token": ""
+  },
+  {
+    "date": "2025-01-02",
+    "group": "Kardiologia",
+    "token": ""
+  },
+  {
+    "date": "2025-01-03",
+    "group": "Kardiologia",
+    "token": "2"
+  },
+  {
+    "date": "2025-01-04",
+    "group": "Kardiologia",
+    "token": "2"
+  },
+  {
+    "date": "2025-01-05",
+    "group": "Kardiologia",
+    "token": "2"
+  },
+  {
+    "date": "2025-01-06",
+    "group": "Kardiologia",
+    "token": "2"
   }
 ]
